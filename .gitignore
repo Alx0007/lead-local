@@ -1,0 +1,12 @@
+# backups e exportações que você gera usando o app
+*.csv
+leadlocal-backup-*.json
+leads-*.csv
+
+# lixo de sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# se um dia você usar node aqui
+node_modules/

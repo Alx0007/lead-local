@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lead Local — prospecção local</title>
+<meta name="description" content="Prospecção de clientes locais com score de oportunidade, CRM e WhatsApp.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">Lead<b>Local</b></div>
+  <nav>
+    <button data-v="buscar" class="on">Buscar</button>
+    <button data-v="crm">CRM</button>
+    <button data-v="painel">Painel</button>
+  </nav>
+  <div class="spacer"></div>
+  <button class="hbtn" id="bExp">Exportar CSV</button>
+  <button class="hbtn" id="bBkp">Backup</button>
+  <button class="hbtn" id="bCfg">⚙ Config</button>
+</header>
+
+<main>
+  <!-- ================= BUSCAR ================= -->
+  <section class="view on" id="v-buscar">
+    <div id="noStore"></div>
+    <div class="panel">
+      <h2>Encontrar empresas</h2>
+      <p class="sub">Escolha o nicho e a cidade. O app busca negócios reais, pontua cada um por chance de fechar e te dá o WhatsApp pronto.</p>
+
+      <div class="grid g-nicho">
+        <div class="f">
+          <label>Categoria</label>
+          <select id="cat"></select>
+          <div class="hint">Filtra a lista de nichos ao lado.</div>
+        </div>
+        <div class="f">
+          <label>Nicho / tipo de negócio</label>
+          <select id="qSel"></select>
+          <input id="q" placeholder="ex: hamburgueria artesanal" autocomplete="off" style="display:none;margin-top:8px">
+          <div class="hint">Escolha na lista, ou use <b>“outro termo”</b> no fim dela para digitar o que quiser.</div>
+        </div>
+      </div>
+
+      <div class="grid g-local">
+        <div class="f">
+          <label>Estado</label>
+          <select id="uf"></select>
+        </div>
+        <div class="f">
+          <label>Cidade</label>
+          <select id="cidadeSel"><option value="">— escolha o estado primeiro —</option></select>
+          <input id="cidade" placeholder="ex: Curitiba, PR" autocomplete="off" style="display:none">
+          <div class="hint" id="hCidade">Com a lista aberta, digite as primeiras letras para pular direto.</div>
+        </div>
+        <div class="f">
+          <label>Máx. resultados</label>
+          <select id="lim">
+            <option>30</option><option selected>60</option><option>120</option><option>200</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="f">
+        <label>Fonte dos dados</label>
+        <div class="srcpick">
+          <label id="lbGoo" class="on">
+            <input type="radio" name="src" value="google" checked>
+            <span>
+              <span class="t">Google Maps · principal</span>
+              <span class="d">Cobertura completa, com telefone, nota e nº de avaliações. Cole a chave em ⚙ Config.</span>
+            </span>
+          </label>
+          <label id="lbOsm">
+            <input type="radio" name="src" value="osm">
+            <span>
+              <span class="t">OpenStreetMap · reserva grátis</span>
+              <span class="d">Sem chave e sem custo. Use se a cota do Google acabar. Não traz nota nem avaliações.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="f" id="fBairros">
+        <label>Bairros ou regiões <span style="text-transform:none;color:var(--dim2);font-weight:400">— opcional, separados por vírgula</span></label>
+        <input id="bairros" placeholder="ex: Centro, Batel, Água Verde, Portão" autocomplete="off">
+        <div class="hint">O Google devolve no máximo 20 empresas por busca. Cada bairro aqui vira uma busca separada — 5 bairros ≈ 100 leads. É assim que você faz volume.</div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" id="bGo">Buscar leads</button>
+        <button class="btn ghost" id="bDemo">Ver com dados de exemplo</button>
+      </div>
+
+      <div id="status"></div>
+    </div>
+
+    <div class="bar" id="resBar" style="display:none">
+      <h2>Resultados <span id="resN" style="color:var(--dim);font-weight:400"></span></h2>
+      <div class="spacer"></div>
+      <span class="chip" data-flt="nosite">Sem site ou só rede social</span>
+      <span class="chip" data-flt="fone">Só com telefone</span>
+      <span class="chip" data-flt="quente">Só quentes</span>
+      <button class="btn sm ghost" id="bAddAll">Mandar visíveis pro CRM</button>
+      <button class="btn sm" id="bLote" style="display:none">Disparar no WhatsApp</button>
+    </div>
+    <div class="cards" id="res"></div>
+  </section>
+
+  <!-- ================= CRM ================= -->
+  <section class="view" id="v-crm">
+    <div class="bar">
+      <h2>Funil de vendas</h2>
+      <div class="spacer"></div>
+      <button class="btn sm ghost" id="bLimpar">Limpar funil</button>
+    </div>
+    <div class="kb" id="kb"></div>
+  </section>
+
+  <!-- ================= PAINEL ================= -->
+  <section class="view" id="v-painel">
+    <div class="bar"><h2>Painel</h2></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="panel">
+      <h2>Distribuição do funil</h2>
+      <p class="sub">Quantos leads em cada etapa.</p>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>Top 8 oportunidades</h2>
+      <p class="sub">Maiores scores que ainda não saíram da etapa "Novo".</p>
+      <div class="bars" id="top"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= MODAIS ================= -->
+<div class="mask" id="mCfg">
+  <div class="modal">
+    <h2>Configurações</h2>
+    <p class="sub">Seus dados entram nos modelos de mensagem. A chave do Google fica só na sua máquina.</p>
+    <div class="grid" style="gap:13px">
+      <div class="f"><label>Seu nome</label><input id="cNome" placeholder="ex: Miqueias"></div>
+      <div class="f"><label>O que você vende</label><input id="cServ" placeholder="ex: landing pages que captam clientes pelo WhatsApp"></div>
+      <div class="f"><label>Seu site / portfólio (opcional)</label><input id="cSite" placeholder="ex: seusite.com.br"></div>
+      <div class="f">
+        <label>Chave da Google Places API</label>
+        <input id="cKey" placeholder="AIza..." autocomplete="off">
+        <div class="hint">Sem ela o app ainda funciona, mas só na fonte OpenStreetMap.</div>
+      </div>
+    </div>
+
+    <h2 style="margin-top:22px">Mensagem padrão</h2>
+    <p class="sub">É o texto que aparece já preenchido em toda mensagem. Você sempre revisa antes de enviar.</p>
+    <div class="f">
+      <textarea id="cMsg" style="min-height:230px"></textarea>
+      <div class="hint">
+        Etiquetas trocadas automaticamente:
+        <b>[nome do restaurante]</b> ou <b>[nome]</b>, <b>[categoria]</b>, <b>[cidade]</b>.
+        A etiqueta <b>[link]</b> fica como está — é você que cola o endereço da página de cada lead na hora do envio.
+      </div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:9px">
+      <button class="btn sm ghost" id="bMsgPadrao">Restaurar texto original</button>
+      <button class="btn sm ghost" id="bMsgAuto">Usar os modelos automáticos</button>
+    </div>
+    <details class="help">
+      <summary>Como gerar a chave do Places sem risco de ser cobrado</summary>
+      <ol>
+        <li>Entre em console.cloud.google.com e crie um projeto novo.</li>
+        <li>Ative a <b>Places API (New)</b> na biblioteca de APIs.</li>
+        <li>Em "Credenciais", gere uma chave de API e cole aqui.</li>
+        <li><b>O passo que protege seu bolso:</b> em "APIs e serviços → Places API → Cotas", defina um limite diário baixo (ex.: 200 requisições/dia). Estourou a cota, a API simplesmente para de responder — não gera cobrança.</li>
+        <li>Crie também um alerta de orçamento em "Faturamento → Orçamentos" com valor R$ 1, só pra ser avisado se algo escapar.</li>
+      </ol>
+    </details>
+
+    <h2 style="margin-top:22px">Escrita com IA <span style="font-size:11px;color:var(--ok);font-weight:600">grátis</span></h2>
+    <p class="sub">Opcional. Serve pra escrever a mensagem de abordagem personalizada de cada lead.</p>
+    <div class="grid" style="gap:13px">
+      <div class="f">
+        <label>Provedor</label>
+        <select id="cIaProv">
+          <option value="gemini">Google Gemini — grátis, sem cartão (recomendado)</option>
+          <option value="openrouter">OpenRouter — tem modelos grátis</option>
+          <option value="groq">Groq — grátis e muito rápido</option>
+        </select>
+      </div>
+      <div class="f">
+        <label>Chave da IA</label>
+        <input id="cIaKey" placeholder="cole a chave aqui" autocomplete="off">
+      </div>
+      <div class="f">
+        <label>Modelo</label>
+        <input id="cIaMod" list="modelos" placeholder="gemini-2.0-flash">
+        <datalist id="modelos">
+          <option value="gemini-2.0-flash"></option>
+          <option value="gemini-2.5-flash"></option>
+          <option value="meta-llama/llama-3.3-70b-instruct:free"></option>
+          <option value="llama-3.3-70b-versatile"></option>
+        </datalist>
+        <div class="hint">Se der erro de "modelo não encontrado", o nome mudou — troque aqui sem mexer no resto.</div>
+      </div>
+    </div>
+    <details class="help">
+      <summary>Como pegar a chave grátis do Gemini (2 minutos, sem cartão)</summary>
+      <ol>
+        <li>Entre em <b>aistudio.google.com</b> com a mesma conta Google.</li>
+        <li>Clique em "Get API key" e depois em "Create API key".</li>
+        <li>Copie e cole no campo acima. Pronto — não pede cartão.</li>
+        <li>O nível gratuito dá algo em torno de 1.500 chamadas por dia no modelo Flash, o que é muito mais do que você vai usar escrevendo mensagens uma a uma.</li>
+      </ol>
+    </details>
+    <h2 style="margin-top:22px">Envio automático pelo WhatsApp <span style="font-size:11px;color:var(--warm);font-weight:600">uazapi</span></h2>
+    <p class="sub">Com isso o app dispara a mensagem sozinho, sem abrir o WhatsApp Web.</p>
+    <div class="warn" style="margin:0 0 14px">
+      <b>Leia antes de usar.</b> A uazapi é um gateway não-oficial: ela conecta no seu WhatsApp como se fosse o WhatsApp Web.
+      Isso está fora dos termos de uso do WhatsApp, e o número que corre risco de banimento é o seu.
+      Use um chip separado do pessoal, respeite o intervalo e o teto diário abaixo, e não mande o mesmo texto para todo mundo —
+      mensagem repetida em massa é o padrão que o WhatsApp detecta.
+    </div>
+    <div class="grid" style="gap:13px">
+      <div class="f">
+        <label>Servidor</label>
+        <input id="cUazUrl" placeholder="https://free.uazapi.com" autocomplete="off">
+      </div>
+      <div class="f">
+        <label>Token da instância</label>
+        <input id="cUazToken" placeholder="cole o token da instância" autocomplete="off">
+        <div class="hint">Fica só no seu navegador, como as outras chaves. Não vai para dentro do código.</div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:13px">
+        <div class="f">
+          <label>Intervalo entre envios (segundos)</label>
+          <input id="cUazInt" type="number" min="20" step="5" placeholder="60">
+          <div class="hint">Mínimo 20. O app sorteia uma variação em cima disso, para não sair num ritmo de robô.</div>
+        </div>
+        <div class="f">
+          <label>Teto de envios por dia</label>
+          <input id="cUazLim" type="number" min="1" step="5" placeholder="30">
+          <div class="hint">Comece baixo. Chip novo disparando muito é o que derruba.</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:12px">
+      <button class="btn sm ghost" id="bUazTeste">Testar conexão</button>
+      <span id="uazStatus" class="hint" style="margin:0"></span>
+    </div>
+
+    <div class="foot">
+      <button class="btn ghost" onclick="closeM('mCfg')">Fechar</button>
+      <button class="btn" id="bSalvarCfg">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mMsg">
+  <div class="modal">
+    <h2 id="msgTit">Mensagem de abordagem</h2>
+    <p class="sub">Gerada a partir do que faltou no lead. Edite à vontade antes de mandar.</p>
+    <div class="f"><textarea id="msgTxt"></textarea></div>
+    <div class="warn" style="margin:14px 0 0">
+      <b>Antes de disparar:</b> use um número separado do seu pessoal, mande poucas mensagens por dia e personalize cada uma. Disparo em massa no WhatsApp derruba número.
+    </div>
+    <div class="foot">
+      <button class="btn ghost" onclick="closeM('mMsg')">Fechar</button>
+      <button class="btn ghost" id="bIA">✨ Reescrever com IA</button>
+      <button class="btn ghost" id="bCopiar">Copiar texto</button>
+      <button class="btn ghost" id="bEnviar" style="display:none">Enviar agora</button>
+      <button class="btn" id="bWa">Abrir no WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mBkp">
+  <div class="modal">
+    <h2>Backup do funil</h2>
+    <p class="sub">Guarde ou recupere seus leads em um arquivo. Útil pra levar de um computador pro outro.</p>
+    <div style="display:flex;gap:9px;flex-wrap:wrap">
+      <button class="btn" id="bBaixar">Baixar backup (.json)</button>
+      <button class="btn ghost" id="bRest">Restaurar de arquivo</button>
+      <input type="file" id="fBkp" accept=".json" style="display:none">
+    </div>
+    <div class="foot"><button class="btn ghost" onclick="closeM('mBkp')">Fechar</button></div>
+  </div>
+</div>
+
+<div class="mask" id="mLote">
+  <div class="modal">
+    <h2>Fila de envio</h2>
+    <p class="sub">Uma mensagem por vez. Revise o texto, cole o link da página desse lead, e mande.</p>
+
+    <div id="loteResumo" class="loteres"></div>
+    <div class="lotebar"><div class="lotefl" id="loteFl"></div></div>
+
+    <div id="loteAtual">
+      <div class="f">
+        <label id="loteQuem">—</label>
+        <textarea id="loteTxt" style="min-height:225px"></textarea>
+      </div>
+    </div>
+
+    <div id="loteLog" class="lotelog"></div>
+
+    <div class="foot">
+      <button class="btn ghost" onclick="closeM('mLote')">Fechar</button>
+      <button class="btn ghost" id="bLotePular">Pular este</button>
+      <button class="btn" id="bLoteEnviar">Enviar e ir para o próximo</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

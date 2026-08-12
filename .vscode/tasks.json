@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Servidor local (Python)",
+      "type": "shell",
+      "command": "python -m http.server 8000",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "detail": "Alternativa ao Live Server. Depois abra http://localhost:8000"
+    }
+  ]
+}
