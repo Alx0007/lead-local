@@ -703,6 +703,13 @@ function traduzirErroGoogle(msg){
     if(k && k.slice(0,4) !== 'AIza' && k.toLowerCase().startsWith('aiza'))
       return `a chave está com "${k.slice(0,4)}" no lugar de "AIza" — o teclado do celular ` +
              'trocou a maiúscula ao colar. Cole de novo em ⚙ Config.';
+    /* O Google devolve "API key not valid" tanto para chave errada quanto
+       para origem não autorizada. Se o formato da chave está certo, a
+       segunda hipótese é a mais provável — e é a que o usuário não adivinha. */
+    if(k && k.slice(0,4) === 'AIza')
+      return 'o Google recusou a chave, e o formato dela está correto. A causa mais ' +
+             `provável é este endereço não estar liberado: ${location.origin}. ` +
+             'No Google Cloud, em Credenciais, adicione-o nas restrições da chave.';
     return 'a chave não é válida. Confira se copiou inteira, sem espaços.';
   }
   if(/API_KEY_HTTP_REFERRER_BLOCKED|referer/i.test(m))
@@ -2013,6 +2020,7 @@ $('#bDiag').addEventListener('click', async ()=>{
   };
 
   nlog('sk', navigator.onLine ? 'aparelho online' : 'APARELHO OFFLINE');
+  nlog('sk', 'origem enviada ao Google: ' + location.origin);
   nlog(CFG.key ? 'ok' : 'er', CFG.key
     ? `chave do Google presente (${CFG.key.length} caracteres, começa com ${esc(CFG.key.slice(0,6))})`
     : 'SEM chave do Google neste aparelho — cole em ⚙ Config');
