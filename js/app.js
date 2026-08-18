@@ -2035,8 +2035,7 @@ $('#bCopiarDiag').addEventListener('click', async ()=>{
     'aparelho: ' + navigator.userAgent,
     'endereço: ' + location.origin,
     ''
-  ].concat(linhas).join('
-');
+  ].concat(linhas).join(String.fromCharCode(10));
   try{
     await navigator.clipboard.writeText(texto);
     toast('Resultado copiado. Cole onde quiser.');
