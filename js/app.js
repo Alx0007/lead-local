@@ -1562,16 +1562,22 @@ function lerSites(){
 $('#bSiteAdd').addEventListener('click', ()=> $('#cSites').appendChild(linhaSite('', '')));
 
 $('#bSalvarCfg').addEventListener('click', ()=>{
+  const arrumada = consertarPrefixo($('#cKey').value);
   CFG = {nome:$('#cNome').value.trim(), serv:$('#cServ').value.trim(),
-         site:$('#cSite').value.trim(), key:$('#cKey').value.trim(),
+         site:$('#cSite').value.trim(),
          iaProv:$('#cIaProv').value, iaKey:$('#cIaKey').value.trim(),
+         key:'',   // preenchido logo abaixo, depois de consertar o prefixo
          iaMod:$('#cIaMod').value.trim() || 'gemini-2.0-flash',
          msgPadrao:$('#cMsg').value.trim(),
          uazUrl:$('#cUazUrl').value.trim(), uazToken:$('#cUazToken').value.trim(),
          uazInt:Math.max(20, Number($('#cUazInt').value) || 60),
          uazLim:Math.max(1,  Number($('#cUazLim').value) || 30),
          sites:lerSites()};
-  Store.set('ll_cfg', CFG); closeM('mCfg'); pintarEnvio(); toast('Configurações salvas.');
+  CFG.key = arrumada.chave;
+  Store.set('ll_cfg', CFG); closeM('mCfg'); pintarEnvio();
+  toast(arrumada.mudou
+    ? `Salvo. Corrigi o início da chave de "${arrumada.de}" para "${PREFIXO}".`
+    : 'Configurações salvas.');
   avisarChaveTorta();
   if(CFG.nome && window.Equipe && Nuvem.logado){
     Equipe.salvarMeuNome(CFG.nome).then(()=>{ renderKb(); }).catch(()=>{});
@@ -1594,6 +1600,23 @@ $('#bMsgAuto').addEventListener('click', ()=>{
    são desenhados iguais, e 0 e O também se confundem. Digitar a chave
    olhando para a tela erra sem que ninguém perceba, e o Google responde
    só "API key not valid". Este detector aponta o caractere. */
+/* Conserta o prefixo "AIzaSy", que é fixo em toda chave do Google.
+   Mexe SÓ nesses 6 caracteres, e só quando o que está lá é uma variante
+   confundível deles (maiúscula trocada, L no lugar do i, zero no lugar
+   do ó). Se for outra coisa, não encosta: a chave pode ser de outro
+   serviço, e "consertar" o que não entendo seria pior que recusar.
+   O resto da chave — a parte secreta — nunca é alterado. */
+const PREFIXO = 'AIzaSy';
+const achatar = t => String(t).toLowerCase().replace(/l/g,'i').replace(/0/g,'o');
+
+function consertarPrefixo(bruto){
+  const k = String(bruto||'').trim().replace(/\s+/g,'');   // espaço colado junto também sai
+  const tem = k.slice(0, PREFIXO.length);
+  if(!k || tem === PREFIXO) return {chave:k, mudou:false};
+  if(achatar(tem) !== achatar(PREFIXO)) return {chave:k, mudou:false};
+  return {chave: PREFIXO + k.slice(PREFIXO.length), mudou:true, de:tem};
+}
+
 function prefixoTorto(k){
   const certo = 'AIza', tem = String(k||'').slice(0,4);
   if(tem === certo) return null;
@@ -1624,6 +1647,16 @@ function avisarChaveTorta(){
     setStatus(`A chave parece incompleta: ${k.length} caracteres, e o normal são 39. Confira se copiou inteira.`, 'err');
   }
 }
+
+/* Conserta assim que você cola, para a mudança ficar visível no campo
+   em vez de acontecer escondida ao salvar. */
+$('#cKey').addEventListener('blur', ()=>{
+  const r = consertarPrefixo($('#cKey').value);
+  if(r.mudou){
+    $('#cKey').value = r.chave;
+    toast(`Corrigi o início da chave: "${r.de}" virou "${PREFIXO}".`);
+  }
+});
 
 $('#bUazTeste').addEventListener('click', async ()=>{
   const el = $('#uazStatus'), b = $('#bUazTeste');
@@ -1908,7 +1941,14 @@ if(CHAMADAS.dia !== new Date().toISOString().slice(0,10)){ CHAMADAS = {dia:'', n
 if(!CFG.key){
   setStatus('Cole sua chave do Google Places em ⚙ Config para começar a buscar.');
 }else{
-  avisarChaveTorta();
+  // chave já salva com prefixo torto de antes desta correção
+  const r = consertarPrefixo(CFG.key);
+  if(r.mudou){
+    CFG.key = r.chave; Store.set('ll_cfg', CFG);
+    setStatus(`Corrigi o início da sua chave, que estava como "${r.de}" em vez de "${PREFIXO}". Pode buscar.`);
+  }else{
+    avisarChaveTorta();
+  }
 }
 if(!Store.ok){
   $('#noStore').innerHTML = '<div class="warn"><b>Aviso:</b> este navegador está bloqueando o armazenamento local, ' +
