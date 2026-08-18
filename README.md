@@ -80,6 +80,17 @@ Um envio bem-sucedido move o lead para "Contatado" no funil.
 
 **O aviso que importa:** a uazapi é um gateway não-oficial — conecta no seu WhatsApp como o WhatsApp Web faz. Isso está fora dos termos de uso do WhatsApp, e o número que corre risco de banimento é o seu. Use um chip separado do pessoal e comece com o teto baixo.
 
+## Publicando para a equipe
+
+O app precisa estar num endereço que todos alcancem — `localhost` só existe na sua máquina e não abre no celular.
+
+A publicação é pelo **Netlify**, ligado ao repositório do GitHub: em netlify.com, "Add new site" → "Import an existing project" → escolha o repositório. Não tem build, então o comando fica vazio e a pasta publicada é a raiz (o `netlify.toml` já diz isso). A cada `git push`, o site atualiza sozinho.
+
+Depois de publicar, dois ajustes:
+
+- No Google Cloud, libere o endereço novo nas restrições da chave do Places. Sem isso a busca para de funcionar fora do localhost.
+- Os dados são protegidos pelo login do Supabase, não pelo endereço. Quem abrir a URL vê só a tela de entrada.
+
 ## Guardando versões
 
 Se quiser histórico do que você mudou, dentro da pasta:
