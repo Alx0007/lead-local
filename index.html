@@ -5,15 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lead Local — prospecção local</title>
 <meta name="description" content="Prospecção de clientes locais com score de oportunidade, CRM e WhatsApp.">
-<link rel="stylesheet" href="css/style.css">
+<!-- O ?v= no fim do CSS e do JS existe para o navegador não servir versão
+     antiga do arquivo. Se você editar um dos dois e a mudança não aparecer
+     na tela, aumente o número nos dois lugares. -->
+<link rel="stylesheet" href="css/style.css?v=14">
 </head>
 <body>
 
 <header>
-  <div class="logo">Lead<b>Local</b></div>
+  <div class="logo">Lead<b>Local</b><span class="tag">estúdio</span></div>
   <nav>
-    <button data-v="buscar" class="on">Buscar</button>
-    <button data-v="crm">CRM</button>
+    <button data-v="buscar" class="on">Prospectar</button>
+    <button data-v="crm">Funil</button>
+    <button data-v="landings">Landings</button>
     <button data-v="painel">Painel</button>
   </nav>
   <div class="spacer"></div>
@@ -63,26 +67,6 @@
         </div>
       </div>
 
-      <div style="margin-top:14px" class="f">
-        <label>Fonte dos dados</label>
-        <div class="srcpick">
-          <label id="lbGoo" class="on">
-            <input type="radio" name="src" value="google" checked>
-            <span>
-              <span class="t">Google Maps · principal</span>
-              <span class="d">Cobertura completa, com telefone, nota e nº de avaliações. Cole a chave em ⚙ Config.</span>
-            </span>
-          </label>
-          <label id="lbOsm">
-            <input type="radio" name="src" value="osm">
-            <span>
-              <span class="t">OpenStreetMap · reserva grátis</span>
-              <span class="d">Sem chave e sem custo. Use se a cota do Google acabar. Não traz nota nem avaliações.</span>
-            </span>
-          </label>
-        </div>
-      </div>
-
       <div style="margin-top:14px" class="f" id="fBairros">
         <label>Bairros ou regiões <span style="text-transform:none;color:var(--dim2);font-weight:400">— opcional, separados por vírgula</span></label>
         <input id="bairros" placeholder="ex: Centro, Batel, Água Verde, Portão" autocomplete="off">
@@ -91,20 +75,69 @@
 
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" id="bGo">Buscar leads</button>
-        <button class="btn ghost" id="bDemo">Ver com dados de exemplo</button>
       </div>
 
       <div id="status"></div>
     </div>
 
-    <div class="bar" id="resBar" style="display:none">
-      <h2>Resultados <span id="resN" style="color:var(--dim);font-weight:400"></span></h2>
-      <div class="spacer"></div>
-      <span class="chip" data-flt="nosite">Sem site ou só rede social</span>
-      <span class="chip" data-flt="fone">Só com telefone</span>
-      <span class="chip" data-flt="quente">Só quentes</span>
-      <button class="btn sm ghost" id="bAddAll">Mandar visíveis pro CRM</button>
-      <button class="btn sm" id="bLote" style="display:none">Disparar no WhatsApp</button>
+    <div id="resBar" style="display:none">
+      <div class="bar">
+        <h2>Resultados <span id="resN" style="color:var(--dim);font-weight:400"></span></h2>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="bAddAll">Mandar visíveis pro CRM</button>
+        <button class="btn sm" id="bLote" style="display:none">Disparar no WhatsApp</button>
+      </div>
+
+      <div class="filtros">
+        <div class="fgrupo">
+          <span class="flabel">Oportunidade</span>
+          <span class="chip" data-flt="nosite">Sem site próprio</span>
+          <span class="chip" data-flt="quente">Só quentes</span>
+        </div>
+        <div class="fgrupo">
+          <span class="flabel">Contato</span>
+          <span class="chip" data-flt="fone">Tem telefone</span>
+          <span class="chip" data-flt="zap">Provável WhatsApp</span>
+        </div>
+        <div class="fgrupo">
+          <span class="flabel">Esconder</span>
+          <span class="chip" data-flt="semFunil">Já no funil</span>
+          <span class="chip" data-flt="semWa">Sem WhatsApp</span>
+        </div>
+        <div class="fgrupo">
+          <span class="flabel">Score mínimo</span>
+          <select class="fsel" id="fScore">
+            <option value="0">qualquer</option>
+            <option value="50">50+ morno</option>
+            <option value="65">65+</option>
+            <option value="75">75+ quente</option>
+            <option value="85">85+</option>
+          </select>
+        </div>
+        <div class="fgrupo">
+          <span class="flabel">Avaliações</span>
+          <select class="fsel" id="fAval">
+            <option value="">qualquer</option>
+            <option value="zero">sem avaliações</option>
+            <option value="ate30">até 30 · pouca presença</option>
+            <option value="31a150">31 a 150</option>
+            <option value="mais150">mais de 150</option>
+          </select>
+        </div>
+        <div class="fgrupo">
+          <span class="flabel">Nota do Google</span>
+          <select class="fsel" id="fNota">
+            <option value="0">qualquer</option>
+            <option value="-1">sem nota</option>
+            <option value="3">3,0+</option>
+            <option value="4">4,0+</option>
+            <option value="4.5">4,5+</option>
+            <option value="-2">abaixo de 3,5</option>
+          </select>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn sm ghost" id="bLimpaFlt" style="display:none">Limpar filtros</button>
+      </div>
     </div>
     <div class="cards" id="res"></div>
   </section>
@@ -112,11 +145,57 @@
   <!-- ================= CRM ================= -->
   <section class="view" id="v-crm">
     <div class="bar">
-      <h2>Funil de vendas</h2>
+      <h2>Funil de vendas <span id="kbN" style="color:var(--dim);font-weight:400"></span></h2>
       <div class="spacer"></div>
       <button class="btn sm ghost" id="bLimpar">Limpar funil</button>
     </div>
+
+    <div class="filtros">
+      <div class="fgrupo" style="flex:1;min-width:210px">
+        <span class="flabel">Buscar</span>
+        <input class="fbusca" id="kbQ" placeholder="nome do lead…" autocomplete="off">
+      </div>
+      <div class="fgrupo">
+        <span class="flabel">Nicho</span>
+        <select class="fsel" id="kbNicho"><option value="">todos</option></select>
+      </div>
+      <div class="fgrupo">
+        <span class="flabel">Ordenar por</span>
+        <select class="fsel" id="kbOrdem">
+          <option value="score">score</option>
+          <option value="valor">valor da proposta</option>
+          <option value="prox">próximo contato</option>
+          <option value="nome">nome</option>
+        </select>
+      </div>
+      <div class="fgrupo">
+        <span class="flabel">Mostrar só</span>
+        <span class="chip" data-kflt="atrasado">Contato atrasado</span>
+        <span class="chip" data-kflt="comValor">Com proposta</span>
+        <span class="chip" data-kflt="quente">Quentes</span>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn sm ghost" id="bKbLimpa" style="display:none">Limpar</button>
+    </div>
+
     <div class="kb" id="kb"></div>
+  </section>
+
+  <!-- ================= LANDINGS ================= -->
+  <section class="view" id="v-landings">
+    <div class="bar">
+      <h2>Acervo de landings <span id="lgN" style="color:var(--dim);font-weight:400"></span></h2>
+      <div class="spacer"></div>
+      <select class="fsel" id="lgFiltro"><option value="">todos os nichos</option></select>
+      <select class="fsel" id="lgStatus">
+        <option value="">todos os estados</option>
+        <option value="modelo">modelo pronto</option>
+        <option value="proposta">enviada como proposta</option>
+        <option value="entregue">entregue ao cliente</option>
+      </select>
+      <button class="btn sm" id="bLgNova">+ Nova landing</button>
+    </div>
+    <div class="lgrid" id="lgLista"></div>
   </section>
 
   <!-- ================= PAINEL ================= -->
@@ -127,6 +206,16 @@
       <h2>Distribuição do funil</h2>
       <p class="sub">Quantos leads em cada etapa.</p>
       <div class="bars" id="bars"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>Negociações em aberto</h2>
+      <p class="sub">Quem tem proposta na mesa, por valor. Vermelho é contato atrasado.</p>
+      <div id="negoc"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2>Agenda</h2>
+      <p class="sub">Próximos contatos marcados na ficha de cada lead.</p>
+      <div id="agenda"></div>
     </div>
     <div class="panel" style="margin-top:14px">
       <h2>Top 8 oportunidades</h2>
@@ -148,7 +237,7 @@
       <div class="f">
         <label>Chave da Google Places API</label>
         <input id="cKey" placeholder="AIza..." autocomplete="off">
-        <div class="hint">Sem ela o app ainda funciona, mas só na fonte OpenStreetMap.</div>
+        <div class="hint">Sem ela o app não busca. Fica guardada só no seu navegador.</div>
       </div>
     </div>
 
@@ -159,13 +248,18 @@
       <div class="hint">
         Etiquetas trocadas automaticamente:
         <b>[nome do restaurante]</b> ou <b>[nome]</b>, <b>[categoria]</b>, <b>[cidade]</b>.
-        A etiqueta <b>[link]</b> fica como está — é você que cola o endereço da página de cada lead na hora do envio.
+        A etiqueta <b>[link]</b> vira o site cadastrado logo abaixo para o nicho buscado. Sem cadastro, ela fica visível no texto para você não esquecer de colar.
       </div>
     </div>
     <div style="display:flex;gap:9px;margin-top:9px">
       <button class="btn sm ghost" id="bMsgPadrao">Restaurar texto original</button>
       <button class="btn sm ghost" id="bMsgAuto">Usar os modelos automáticos</button>
     </div>
+
+    <h2 style="margin-top:22px">Site padrão por nicho</h2>
+    <p class="sub">A etiqueta <b>[link]</b> da mensagem é trocada pelo endereço cadastrado no nicho que você buscou. Assim a mesma página de demonstração serve para todos os leads daquele tipo.</p>
+    <div id="cSites"></div>
+    <button class="btn sm ghost" id="bSiteAdd" style="margin-top:9px">+ Adicionar nicho</button>
     <details class="help">
       <summary>Como gerar a chave do Places sem risco de ser cobrado</summary>
       <ol>
@@ -274,6 +368,114 @@
   </div>
 </div>
 
+<div class="mask" id="mLg">
+  <div class="modal">
+    <h2 id="lgTit">Nova landing</h2>
+    <p class="sub">O acervo é o que você já produziu. Marque os nichos para reusar a página como demonstração na prospecção.</p>
+
+    <div class="grid" style="grid-template-columns:2fr 1fr;gap:13px">
+      <div class="f"><label>Nome da landing</label><input id="lgNome" placeholder="ex: Pizzaria — modelo Forno"></div>
+      <div class="f">
+        <label>Estado</label>
+        <select id="lgSt">
+          <option value="modelo">modelo pronto</option>
+          <option value="proposta">enviada como proposta</option>
+          <option value="entregue">entregue ao cliente</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="f" style="margin-top:13px"><label>Endereço</label><input id="lgUrl" placeholder="https://..."></div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:13px;margin-top:13px">
+      <div class="f">
+        <label>Cor principal</label>
+        <div class="corlinha"><input id="lgCor" type="color" value="#7c6cff"><input id="lgCorTxt" placeholder="#7c6cff"></div>
+      </div>
+      <div class="f">
+        <label>Cor de apoio</label>
+        <div class="corlinha"><input id="lgCor2" type="color" value="#1b1f2a"><input id="lgCor2Txt" placeholder="#1b1f2a"></div>
+      </div>
+      <div class="f">
+        <label>Estilo</label>
+        <select id="lgEstilo">
+          <option>minimalista</option><option>moderno</option><option>elegante</option>
+          <option>corporativo</option><option>divertido</option><option>artesanal</option>
+          <option>tecnológico</option><option>luxo</option><option>retrô</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:13px;margin-top:13px">
+      <div class="f">
+        <label>Tipografia</label>
+        <input id="lgFonte" list="fontes" placeholder="ex: Inter + Playfair Display">
+        <datalist id="fontes">
+          <option value="Inter"></option><option value="Poppins"></option>
+          <option value="Montserrat"></option><option value="Playfair Display"></option>
+          <option value="Roboto"></option><option value="Lora"></option>
+          <option value="DM Sans"></option><option value="Bebas Neue"></option>
+        </datalist>
+      </div>
+      <div class="f">
+        <label>Cliente vinculado</label>
+        <select id="lgCliente"><option value="">nenhum — é modelo</option></select>
+      </div>
+    </div>
+
+    <div class="f" style="margin-top:13px">
+      <label>Nichos que esta página atende</label>
+      <div class="nichopick" id="lgNichos"></div>
+      <div class="hint">A etiqueta <b>[link]</b> da mensagem usa a landing marcada aqui para o nicho que você buscou.</div>
+    </div>
+
+    <div class="f" style="margin-top:13px"><label>Notas</label><textarea id="lgNota" style="min-height:90px" placeholder="o que essa página tem de bom, o que reaproveitar…"></textarea></div>
+
+    <div class="foot">
+      <button class="btn ghost" onclick="closeM('mLg')">Fechar</button>
+      <button class="btn ghost" id="bLgDel">Excluir</button>
+      <button class="btn" id="bLgSalvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mLead">
+  <div class="modal">
+    <h2 id="leadTit">Lead</h2>
+    <p class="sub" id="leadSub"></p>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:13px">
+      <div class="f">
+        <label>Etapa</label>
+        <select id="lEtapa"></select>
+      </div>
+      <div class="f">
+        <label>Valor da proposta (R$)</label>
+        <input id="lValor" type="number" min="0" step="50" placeholder="0">
+      </div>
+      <div class="f">
+        <label>Previsão de fechamento</label>
+        <input id="lDataF" type="date">
+      </div>
+      <div class="f">
+        <label>Próximo contato</label>
+        <input id="lProx" type="date">
+      </div>
+    </div>
+
+    <div class="f" style="margin-top:13px">
+      <label>Observações</label>
+      <textarea id="lNota" style="min-height:130px" placeholder="o que foi conversado, quem decide, objeções, combinados…"></textarea>
+    </div>
+
+    <div class="foot">
+      <button class="btn ghost" onclick="closeM('mLead')">Fechar</button>
+      <button class="btn ghost" id="bLeadDel">Remover do funil</button>
+      <button class="btn" id="bLeadSalvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="mask" id="mBkp">
   <div class="modal">
     <h2>Backup do funil</h2>
@@ -314,6 +516,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

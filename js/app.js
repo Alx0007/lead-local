@@ -31,12 +31,28 @@ let CFG   = Store.get('ll_cfg', {
   nome:'', serv:'landing pages que captam clientes pelo WhatsApp', site:'', key:'',
   iaProv:'gemini', iaKey:'', iaMod:'gemini-2.0-flash',
   msgPadrao:null,   // null = nunca mexeu, vale MSG_PADRAO. '' = modelos automáticos
-  uazUrl:'', uazToken:'', uazInt:60, uazLim:30
+  uazUrl:'', uazToken:'', uazInt:60, uazLim:30,
+  sites:{}          // nicho -> endereço da página de demonstração daquele nicho
 });
 let CHAMADAS = Store.get('ll_chamadas', {dia:'', n:0});   // contador de consumo da API
 let CRM   = Store.get('ll_crm', {});   // id -> lead (com .status)
+let LG    = Store.get('ll_landings', []);   // acervo de landings produzidas
+let KFLT  = {q:'', nicho:'', ordem:'score', atrasado:false, comValor:false, quente:false};
 let RES   = [];                        // resultados da busca atual
-let FLT   = {nosite:false, fone:false, quente:false};
+let FLT   = {nosite:false, fone:false, quente:false, zap:false,
+             semFunil:false, semWa:false, score:0, nota:0, aval:''};
+
+/* Números que o WhatsApp disse não existir. Guardado por telefone, não por
+   id do lead: o mesmo número reaparece em buscas e fontes diferentes, e o
+   que não tem WhatsApp hoje não passa a ter porque você buscou de novo. */
+let SEM_WA = new Set(Store.get('ll_semwa', []));
+function marcarSemWa(fone){
+  const n = normFone(fone);
+  if(!n) return;
+  SEM_WA.add(n);
+  Store.set('ll_semwa', Array.from(SEM_WA));
+}
+const ehSemWa = fone => { const n = normFone(fone); return !!n && SEM_WA.has(n); };
 
 const ETAPAS = [
   {k:'novo',       t:'Novo'},
@@ -48,80 +64,28 @@ const ETAPAS = [
 ];
 
 /* =========================================================
-   2. DICIONÁRIO DE NICHOS (português -> etiquetas do OSM)
+   2. NICHOS, CATEGORIAS E LOCALIDADES
    ========================================================= */
-const NICHOS = {
-  'academia':            [['leisure','fitness_centre']],
-  'crossfit':            [['leisure','fitness_centre']],
-  'restaurante':         [['amenity','restaurant']],
-  'pizzaria':            [['amenity','restaurant'],['amenity','fast_food']],
-  'lanchonete':          [['amenity','fast_food']],
-  'hamburgueria':        [['amenity','fast_food']],
-  'cafeteria':           [['amenity','cafe']],
-  'padaria':             [['shop','bakery']],
-  'bar':                 [['amenity','bar'],['amenity','pub']],
-  'sorveteria':          [['amenity','ice_cream']],
-  'salão de beleza':     [['shop','hairdresser'],['shop','beauty']],
-  'cabeleireiro':        [['shop','hairdresser']],
-  'barbearia':           [['shop','hairdresser']],
-  'estética':            [['shop','beauty']],
-  'manicure':            [['shop','beauty']],
-  'dentista':            [['amenity','dentist'],['healthcare','dentist']],
-  'clínica odontológica':[['amenity','dentist'],['healthcare','dentist']],
-  'clínica médica':      [['amenity','clinic'],['healthcare','clinic']],
-  'médico':              [['amenity','doctors']],
-  'psicólogo':           [['healthcare','psychotherapist']],
-  'fisioterapia':        [['healthcare','physiotherapist']],
-  'nutricionista':       [['healthcare','nutrition_counselling']],
-  'laboratório':         [['healthcare','laboratory']],
-  'veterinário':         [['amenity','veterinary']],
-  'pet shop':            [['shop','pet']],
-  'farmácia':            [['amenity','pharmacy']],
-  'advogado':            [['office','lawyer']],
-  'contabilidade':       [['office','accountant']],
-  'imobiliária':         [['office','estate_agent']],
-  'seguros':             [['office','insurance']],
-  'arquiteto':           [['office','architect']],
-  'hotel':               [['tourism','hotel']],
-  'pousada':             [['tourism','guest_house']],
-  'escola':              [['amenity','school']],
-  'escola de idiomas':   [['amenity','language_school']],
-  'autoescola':          [['amenity','driving_school']],
-  'creche':              [['amenity','kindergarten']],
-  'oficina mecânica':    [['shop','car_repair']],
-  'lava jato':           [['shop','car_wash'],['amenity','car_wash']],
-  'concessionária':      [['shop','car']],
-  'borracharia':         [['shop','tyres']],
-  'ótica':               [['shop','optician']],
-  'joalheria':           [['shop','jewelry']],
-  'loja de roupas':      [['shop','clothes']],
-  'calçados':            [['shop','shoes']],
-  'móveis':              [['shop','furniture']],
-  'material de construção':[['shop','doityourself'],['shop','hardware'],['shop','trade']],
-  'supermercado':        [['shop','supermarket']],
-  'mercado':             [['shop','convenience'],['shop','supermarket']],
-  'floricultura':        [['shop','florist']],
-  'gráfica':             [['shop','copyshop'],['craft','printer']],
-  'fotógrafo':           [['shop','photo'],['craft','photographer']],
-  'lavanderia':          [['shop','laundry']],
-  'tatuagem':            [['shop','tattoo']],
-  'informática':         [['shop','computer']],
-  'assistência técnica': [['shop','electronics'],['shop','mobile_phone']],
-  'celular':             [['shop','mobile_phone']],
-  'hospital':            [['amenity','hospital']],
-  'restaurante italiano':[['cuisine','italian']],
-  'comida japonesa':     [['cuisine','japanese'],['cuisine','sushi']],
-  'churrascaria':        [['cuisine','barbecue'],['cuisine','steak_house']],
-  'doceria':             [['shop','confectionery'],['shop','pastry']],
-  'açaí':                [],
-  'pilates':             [['leisure','fitness_centre']],
-  'escola de dança':     [['leisure','dance']],
-  'artes marciais':      [['sport','martial_arts']],
-  'nail designer':       [['beauty','nails'],['shop','beauty']],
-  'depilação':           [['shop','beauty']],
-  'spa':                 [['leisure','spa'],['shop','massage']],
-  'auto peças':          [['shop','car_parts']]
-};
+const NICHOS = [
+  'academia', 'crossfit', 'restaurante', 'pizzaria',
+  'lanchonete', 'hamburgueria', 'cafeteria', 'padaria',
+  'bar', 'sorveteria', 'salão de beleza', 'cabeleireiro',
+  'barbearia', 'estética', 'manicure', 'dentista',
+  'clínica odontológica', 'clínica médica', 'médico', 'psicólogo',
+  'fisioterapia', 'nutricionista', 'laboratório', 'veterinário',
+  'pet shop', 'farmácia', 'advogado', 'contabilidade',
+  'imobiliária', 'seguros', 'arquiteto', 'hotel',
+  'pousada', 'escola', 'escola de idiomas', 'autoescola',
+  'creche', 'oficina mecânica', 'lava jato', 'concessionária',
+  'borracharia', 'ótica', 'joalheria', 'loja de roupas',
+  'calçados', 'móveis', 'material de construção', 'supermercado',
+  'mercado', 'floricultura', 'gráfica', 'fotógrafo',
+  'lavanderia', 'tatuagem', 'informática', 'assistência técnica',
+  'celular', 'hospital', 'restaurante italiano', 'comida japonesa',
+  'churrascaria', 'doceria', 'açaí', 'pastelaria',
+  'pilates', 'escola de dança', 'artes marciais', 'nail designer',
+  'depilação', 'spa', 'auto peças'
+];
 
 /* Agrupamento dos nichos em categorias. Serve só para a interface:
    escolher a categoria filtra a lista de nichos. Nicho que você
@@ -130,7 +94,7 @@ const NICHOS = {
 const CATEGORIAS = {
   'Alimentação':            ['restaurante','restaurante italiano','comida japonesa','churrascaria',
                              'pizzaria','hamburgueria','lanchonete','cafeteria','padaria','doceria',
-                             'sorveteria','açaí','bar'],
+                             'sorveteria','açaí','pastelaria','bar'],
   'Saúde':                  ['hospital','clínica médica','médico','clínica odontológica','dentista',
                              'psicólogo','fisioterapia','nutricionista','laboratório','farmácia',
                              'veterinário','pet shop'],
@@ -167,7 +131,7 @@ function preencherNichos(cat){
       CATEGORIAS[c].forEach(n=>usados.add(n));
       return `<optgroup label="${esc(c)}">${CATEGORIAS[c].map(opt).join('')}</optgroup>`;
     }).join('');
-    const soltos = Object.keys(NICHOS).filter(n=>!usados.has(n)).sort(ptSort);
+    const soltos = NICHOS.filter(n=>!usados.has(n)).sort(ptSort);
     if(soltos.length) html += `<optgroup label="Outros">${soltos.map(opt).join('')}</optgroup>`;
   }
   $('#qSel').innerHTML = '<option value="">— escolha o nicho —</option>' + html +
@@ -279,6 +243,9 @@ function foneBonito(raw){
     : `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
 }
 
+/* busca sem acento e sem caixa: procurar "jose" tem que achar "José" */
+const chave = t => String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
 const REDES = /instagram\.com|facebook\.com|fb\.com|linktr\.ee|linktree|beacons\.ai|bio\.link|wa\.me|api\.whatsapp|bit\.ly|linkedin\.com|tiktok\.com/i;
 
 /* =========================================================
@@ -324,6 +291,16 @@ function pontuar(l){
   const score = Math.max(0, Math.min(100, Math.round(p / max * 100)));
   return { score, motivos: r, faixa: score >= 75 ? 'hot' : score >= 50 ? 'warm' : 'cold' };
 }
+const moeda = v => (Number(v)||0).toLocaleString('pt-BR',
+  {style:'currency', currency:'BRL', maximumFractionDigits:0});
+const dataBonita = d => {
+  if(!d) return '';
+  const [a,m,x] = String(d).split('-');
+  return (a && m && x) ? `${x}/${m}` : '';
+};
+// dias até a data; negativo = já passou
+const diasAte = d => d ? Math.ceil((new Date(d+'T00:00:00') - new Date(hojeISO()+'T00:00:00')) / 86400000) : null;
+
 const nomeFaixa = f => f==='hot' ? 'Quente' : f==='warm' ? 'Morno' : 'Frio';
 
 /* =========================================================
@@ -351,7 +328,19 @@ function aplicarEtiquetas(texto, l){
     .replace(/\[nome do restaurante\]/gi, l.nome || '')
     .replace(/\[nome\]/gi,                l.nome || '')
     .replace(/\[categoria\]/gi,           (l.categoria || 'negócios como o de vocês').toLowerCase())
-    .replace(/\[cidade\]/gi,              l.cidade || '');
+    .replace(/\[cidade\]/gi,              l.cidade || '')
+    // [link] só é trocado se houver site cadastrado para o nicho buscado;
+    // sem cadastro ele fica visível de propósito, para você não esquecer
+    .replace(/\[link\]/gi,                siteDoNicho(l) || '[link]');
+}
+
+/* Ordem de busca do [link]: primeiro o acervo de landings (fonte de verdade),
+   depois o cadastro antigo de Config, que fica só como compatibilidade. */
+function siteDoNicho(l){
+  if(!l || !l._nicho) return '';
+  const naLoja = LG.find(x => x.url && (x.nichos||[]).includes(l._nicho));
+  if(naLoja) return naLoja.url;
+  return (CFG.sites || {})[l._nicho] || '';
 }
 
 function montarMsg(l){
@@ -421,12 +410,33 @@ const uazPronto = () => !!(CFG.uazUrl && CFG.uazToken);
 const uazInt    = () => Math.max(20, Number(CFG.uazInt) || 60);
 const uazLim    = () => Math.max(1,  Number(CFG.uazLim) || 30);
 
+/* A uazapi responde em inglês. Estes são os erros que aparecem de verdade —
+   principalmente o 401, porque instância do servidor gratuito expira sozinha. */
+function traduzirErroUaz(msg, http){
+  const m = String(msg || '');
+  if(http === 401 || /invalid token|unauthorized/i.test(m))
+    return 'a uazapi recusou o token. Confira no painel dela se o endereço do servidor ' +
+           'e o token batem com os da sua instância — o token é válido só no servidor onde a instância vive.';
+  // 463: o WhatsApp barrou a CONTA de iniciar conversas novas. Insistir piora.
+  if(/\b463\b|temporary restriction|restricted from starting/i.test(m))
+    return 'o WhatsApp restringiu temporariamente a SUA conta de iniciar conversas novas (erro 463). ' +
+           'Não insista: cada tentativa durante a restrição piora a avaliação do número. ' +
+           'Espere, use o número normalmente por alguns dias, e volte depois.';
+  if(/is not on WhatsApp/i.test(m))
+    return 'esse número não tem WhatsApp.';
+  if(/not connected|disconnected|need to restore|qr/i.test(m))
+    return 'a instância está desconectada do WhatsApp. Leia o QR code de novo no painel da uazapi.';
+  if(http === 429 || /rate|too many/i.test(m))
+    return 'a uazapi está limitando os envios. Aumente o intervalo em ⚙ Config.';
+  return m || ('HTTP ' + http);
+}
+
 async function uazChamar(caminho, opcoes){
   const o = Object.assign({}, opcoes);
   o.headers = Object.assign({'token': CFG.uazToken}, o.headers || {});
   const r = await fetch(uazBase() + caminho, o);
   const j = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(j.error || j.message || ('HTTP ' + r.status));
+  if(!r.ok) throw new Error(traduzirErroUaz(j.error || j.message, r.status));
   return j;
 }
 
@@ -538,78 +548,29 @@ async function filaEnviar(){
     Store.set('ll_crm', CRM);
     loteLog('ok', l.nome, foneBonito(l.phone));
   }catch(e){
-    loteLog('er', l.nome, (e && e.message) || 'falhou');
+    const msg = (e && e.message) || 'falhou';
+    loteLog('er', l.nome, msg);
+    if(/não tem WhatsApp/i.test(msg)) marcarSemWa(l.phone);
+    // Restrição de conta não é erro de um lead: é o WhatsApp barrando o número.
+    // Continuar a fila só acumula tentativa negativa — para tudo aqui.
+    if(/restringiu temporariamente/i.test(msg)){
+      FILA.enviando = false;
+      FILA.leads = [];
+      $('#loteAtual').style.display = 'none';
+      $('#bLoteEnviar').style.display = 'none';
+      $('#bLotePular').style.display = 'none';
+      $('#loteResumo').innerHTML =
+        '<div><b>Fila interrompida — o WhatsApp restringiu seu número.</b></div>' +
+        '<div>Erro 463: a conta está impedida de iniciar conversas novas. ' +
+        'Cada nova tentativa agora conta contra você.</div>';
+      return;
+    }
   }
   FILA.enviando = false;
   // intervalo com variação de ±40%, para não sair num ritmo mecânico
   FILA.liberaEm = Date.now() + Math.round(uazInt() * 1000 * (0.8 + Math.random() * 0.6));
   renderRes(); renderKb(); renderPainel();
   filaAvancar();
-}
-
-/* =========================================================
-   6. BUSCA — OpenStreetMap (Overpass + Nominatim)
-   ========================================================= */
-async function geocodar(cidade){
-  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=pt-BR' +
-              '&countrycodes=br&q=' + encodeURIComponent(cidade);
-  const r = await fetch(url, {headers:{'Accept':'application/json'}});
-  if(!r.ok) throw new Error('Não consegui localizar a cidade (HTTP ' + r.status + ').');
-  const j = await r.json();
-  if(!j.length) throw new Error('Cidade não encontrada. Tente escrever como "Curitiba, PR".');
-  return j[0];
-}
-
-function montarOverpass(nicho, areaId, limite){
-  const chave = nicho.trim().toLowerCase();
-  const tags  = NICHOS[chave] || [];
-  const partes = tags.map(([k,v]) => `nwr["${k}"="${v}"](area.a);`);
-  // busca por nome sempre entra: pega o que o dicionário não cobre
-  const seguro = chave.replace(/["\\]/g,'');
-  if(seguro) partes.push(`nwr["name"~"${seguro}",i](area.a);`);
-  return `[out:json][timeout:60];area(${areaId})->.a;(${partes.join('')});out tags center ${limite};`;
-}
-
-async function buscarOSM(nicho, cidade, limite){
-  setStatus('Localizando "' + cidade + '"…', 'load');
-  const geo = await geocodar(cidade);
-  if(!geo.osm_id || geo.osm_type !== 'relation')
-    throw new Error('Essa cidade não tem área mapeada no OpenStreetMap. Tente a cidade principal da região.');
-  const areaId = 3600000000 + Number(geo.osm_id);
-
-  setStatus('Procurando "' + nicho + '" em ' + (geo.display_name||cidade).split(',')[0] + '…', 'load');
-  const q = montarOverpass(nicho, areaId, limite);
-  const r = await fetch('https://overpass-api.de/api/interpreter', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:'data=' + encodeURIComponent(q)
-  });
-  if(r.status === 429 || r.status === 504)
-    throw new Error('O servidor gratuito do OpenStreetMap está ocupado. Espere um minuto e tente de novo.');
-  if(!r.ok) throw new Error('Falha na busca (HTTP ' + r.status + ').');
-  const j = await r.json();
-
-  return (j.elements||[]).map(e=>{
-    const t = e.tags || {};
-    if(!t.name) return null;
-    const end = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ');
-    const cat = t.amenity || t.shop || t.office || t.healthcare || t.leisure || t.craft || t.tourism || '';
-    const lat = e.lat != null ? e.lat : (e.center ? e.center.lat : null);
-    const lon = e.lon != null ? e.lon : (e.center ? e.center.lon : null);
-    return {
-      id: 'osm-' + e.type + '-' + e.id,
-      nome: t.name,
-      categoria: cat.replace(/_/g,' '),
-      phone: t.phone || t['contact:phone'] || t['contact:mobile'] || t.mobile || '',
-      website: t.website || t['contact:website'] ||
-               (t['contact:instagram'] ? 'instagram.com/' + t['contact:instagram'].replace(/^@/,'') : ''),
-      endereco: end,
-      cidade: t['addr:city'] || cidade,
-      rating: null, reviews: null,
-      fonte: 'OpenStreetMap',
-      mapa: lat != null ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : ''
-    };
-  }).filter(Boolean);
 }
 
 /* =========================================================
@@ -774,48 +735,54 @@ async function escreverComIA(l, rascunho){
 }
 
 /* =========================================================
-   8. DADOS DE EXEMPLO (pra você ver a ferramenta funcionando)
-   ========================================================= */
-function exemplos(){
-  const base = [
-    ['Academia Corpo & Forma','academia','(41) 99812-4471','',4.2,38],
-    ['Studio Pilates Equilíbrio','academia','(41) 3244-1180','instagram.com/studioequilibrio',4.8,12],
-    ['Smart Fit Batel','academia','(41) 3018-2200','smartfit.com.br',4.4,1820],
-    ['Box CrossFit Ferro','academia','(41) 99655-2013','',4.9,26],
-    ['Academia Vida Ativa','academia','(41) 99120-8876','',3.2,54],
-    ['Espaço Treino Funcional','academia','','instagram.com/espacotreino',4.6,9],
-    ['Power Gym Portão','academia','(41) 3376-4409','powergym.com.br',4.1,213],
-    ['Studio Zen Yoga','academia','(41) 99804-3321','',5.0,7],
-    ['Academia Musculação Central','academia','(41) 3232-9087','',3.8,96],
-    ['Clube Atlético Bairro Alto','academia','(41) 99733-1245','facebook.com/clubebairroalto',4.3,31]
-  ];
-  return base.map((b,i)=>({
-    id:'demo-'+i, nome:b[0], categoria:b[1], phone:b[2], website:b[3],
-    endereco:'Rua Exemplo, '+(100+i*37), cidade:'Curitiba, PR',
-    rating:b[4], reviews:b[5], fonte:'Exemplo',
-    mapa:'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(b[0])
-  }));
-}
-
-/* =========================================================
    9. RENDERIZAÇÃO — resultados
    ========================================================= */
 function visiveis(){
   return RES.filter(l=>{
-    if(FLT.nosite && l.website && !REDES.test(l.website)) return false;
-    if(FLT.fone   && !normFone(l.phone)) return false;
-    if(FLT.quente && l._p.faixa !== 'hot') return false;
+    if(FLT.nosite   && l.website && !REDES.test(l.website)) return false;
+    if(FLT.fone     && !normFone(l.phone)) return false;
+    if(FLT.zap      && !ehCelular(l.phone)) return false;
+    if(FLT.quente   && l._p.faixa !== 'hot') return false;
+    if(FLT.semFunil && CRM[l.id]) return false;
+    if(FLT.semWa    && ehSemWa(l.phone)) return false;
+    if(FLT.score    && l._p.score < FLT.score) return false;
+    if(FLT.aval){
+      const n = l.reviews;
+      // lead sem esse dado (OpenStreetMap não traz) não entra em faixa nenhuma
+      if(n == null) return false;
+      if(FLT.aval === 'zero'    && n !== 0) return false;
+      if(FLT.aval === 'ate30'   && !(n >= 1 && n <= 30)) return false;
+      if(FLT.aval === '31a150'  && !(n > 30 && n <= 150)) return false;
+      if(FLT.aval === 'mais150' && !(n > 150)) return false;
+    }
+    if(FLT.nota){
+      const nota = l.rating;
+      if(FLT.nota === -1 && nota != null) return false;          // só os sem nota
+      if(FLT.nota === -2 && !(nota != null && nota < 3.5)) return false;
+      if(FLT.nota > 0 && !(nota != null && nota >= FLT.nota)) return false;
+    }
     return true;
   });
+}
+
+function filtrosAtivos(){
+  return FLT.nosite || FLT.fone || FLT.zap || FLT.quente ||
+         FLT.semFunil || FLT.semWa || FLT.score || FLT.nota || FLT.aval;
 }
 
 function cardLead(l){
   const p = l._p;
   const noCrm = !!CRM[l.id];
   const wa = normFone(l.phone);
+  const semWa = ehSemWa(l.phone);
+  // lead já trabalhado ou sem WhatsApp confirmado sai do caminho visualmente,
+  // mas continua na lista — some só se você ligar o filtro
+  const apagado = (noCrm || semWa) ? ' apagado' : '';
+  const etapa = noCrm ? (ETAPAS.find(e=>e.k===CRM[l.id].status)||{}).t : '';
   return `
-  <div class="lead ${p.faixa}" data-id="${esc(l.id)}">
-    ${noCrm ? '<div class="inCrm">✓ no funil</div>' : ''}
+  <div class="lead ${p.faixa}${apagado}" data-id="${esc(l.id)}">
+    ${semWa ? '<div class="selo semwa">✕ não tem WhatsApp</div>'
+            : noCrm ? `<div class="selo nofunil">✓ ${esc(etapa || 'no funil')}</div>` : ''}
     <div class="top">
       <div class="nm">${esc(l.nome)}<div class="cat">${esc(l.categoria||'—')} · ${esc(l.fonte)}</div></div>
       <div class="sc ${p.faixa}"><span class="n">${p.score}</span><span class="l">${nomeFaixa(p.faixa)}</span></div>
@@ -828,7 +795,8 @@ function cardLead(l){
       <div class="row"><span class="k">📍</span><span>${esc((l.endereco||'—').slice(0,46))}</span></div>
     </div>
     <div class="acts">
-      <button class="wa" data-a="msg" ${wa?'':'disabled style="opacity:.45"'}>${wa?'WhatsApp':'Sem WhatsApp'}</button>
+      <button class="wa" data-a="msg" ${(wa && !semWa)?'':'disabled'}>${
+        semWa ? 'Sem WhatsApp' : wa ? 'WhatsApp' : 'Sem telefone'}</button>
       <button class="add" data-a="crm">${noCrm ? 'No funil' : '+ Funil'}</button>
       ${l.mapa ? `<button data-a="mapa">Mapa</button>` : ''}
     </div>
@@ -837,35 +805,95 @@ function cardLead(l){
 
 function renderRes(){
   const box = $('#res'), v = visiveis();
-  $('#resBar').style.display = RES.length ? 'flex' : 'none';
+  $('#resBar').style.display = RES.length ? '' : 'none';
   $('#resN').textContent = RES.length ? `· ${v.length} de ${RES.length}` : '';
+  $('#bLimpaFlt').style.display = filtrosAtivos() ? '' : 'none';
   if(!RES.length){ box.innerHTML = ''; return; }
   box.innerHTML = v.length ? v.map(cardLead).join('')
-    : '<div class="empty">Nenhum lead passou pelos filtros. Desligue algum filtro acima.</div>';
+    : '<div class="empty">Nenhum lead passou pelos filtros.<br>Solte algum filtro acima ou clique em "Limpar filtros".</div>';
 }
 
 /* =========================================================
    10. RENDERIZAÇÃO — funil e painel
    ========================================================= */
+function kbPassa(l){
+  if(KFLT.q && !chave(l.nome).includes(chave(KFLT.q))) return false;
+  if(KFLT.nicho && l._nicho !== KFLT.nicho) return false;
+  if(KFLT.quente && l._p.faixa !== 'hot') return false;
+  if(KFLT.comValor && !(Number(l.valor) > 0)) return false;
+  if(KFLT.atrasado){
+    const d = diasAte(l.proxContato);
+    if(d == null || d >= 0 || l.status === 'fechado' || l.status === 'perdido') return false;
+  }
+  return true;
+}
+
+function kbOrdenar(a, b){
+  switch(KFLT.ordem){
+    case 'valor': return (Number(b.valor)||0) - (Number(a.valor)||0);
+    case 'nome':  return a.nome.localeCompare(b.nome, 'pt-BR');
+    case 'prox':  // quem não tem data vai para o fim
+      return (a.proxContato || '9999').localeCompare(b.proxContato || '9999');
+    default:      return b._p.score - a._p.score;
+  }
+}
+
+function kbFiltrosAtivos(){
+  return !!(KFLT.q || KFLT.nicho || KFLT.atrasado || KFLT.comValor || KFLT.quente);
+}
+
 function renderKb(){
   const kb = $('#kb');
+  const todos = Object.values(CRM);
+  const passam = todos.filter(kbPassa);
+
+  // o seletor de nicho lista só o que existe no funil
+  const nichos = Array.from(new Set(todos.map(l=>l._nicho).filter(Boolean))).sort(ptSort);
+  $('#kbNicho').innerHTML = '<option value="">todos</option>' + nichos.map(n=>
+    `<option value="${esc(n)}"${n===KFLT.nicho?' selected':''}>${esc(n)}</option>`).join('');
+
+  $('#kbN').textContent = todos.length
+    ? (kbFiltrosAtivos() ? `· ${passam.length} de ${todos.length}` : `· ${todos.length}`) : '';
+  $('#bKbLimpa').style.display = kbFiltrosAtivos() ? '' : 'none';
+
   kb.innerHTML = ETAPAS.map(e=>{
-    const its = Object.values(CRM).filter(l=>l.status===e.k)
-                      .sort((a,b)=>b._p.score - a._p.score);
+    const its = passam.filter(l=>l.status===e.k).sort(kbOrdenar);
+    const total = todos.filter(l=>l.status===e.k).length;
     return `<div class="col" data-col="${e.k}">
-      <h3>${e.t}<i>${its.length}</i></h3>
+      <h3>${e.t}<i>${kbFiltrosAtivos() ? its.length+'/'+total : total}</i></h3>
       ${its.map(l=>`
         <div class="kcard" draggable="true" data-id="${esc(l.id)}">
           <div class="nm">${esc(l.nome)}</div>
           <div class="sm">${l._p.score} pts · ${l.phone?esc(foneBonito(l.phone)):'sem telefone'}</div>
+          ${linhaValor(l)}
+          ${l.nota ? `<div class="knota">${esc(l.nota.slice(0,90))}${l.nota.length>90?'…':''}</div>` : ''}
           <div class="kacts">
+            <button data-k="edit">Abrir</button>
             <button data-k="msg">Msg</button>
-            <button data-k="del">Remover</button>
           </div>
         </div>`).join('')}
+      ${!its.length && kbFiltrosAtivos() ? '<div class="kvazio">nada aqui com esse filtro</div>' : ''}
     </div>`;
   }).join('');
   ligarDnD();
+}
+
+/* Valor, previsão de fechamento e próximo contato aparecem no card só
+   quando existem — cartão vazio não deve carregar campo em branco. */
+function linhaValor(l){
+  const partes = [];
+  if(l.valor)  partes.push(`<b>${moeda(l.valor)}</b>`);
+  if(l.dataFech) partes.push(`fecha ${dataBonita(l.dataFech)}`);
+  if(!partes.length && !l.proxContato) return '';
+
+  let alerta = '';
+  if(l.proxContato && l.status !== 'fechado' && l.status !== 'perdido'){
+    const d = diasAte(l.proxContato);
+    const classe = d < 0 ? 'atrasado' : d === 0 ? 'hoje' : '';
+    const txt = d < 0 ? `contato atrasado ${-d}d` : d === 0 ? 'contatar hoje' : `contato ${dataBonita(l.proxContato)}`;
+    alerta = `<span class="kprox ${classe}">${txt}</span>`;
+  }
+  return `<div class="kval">${partes.join(' · ')}${alerta}</div>`;
 }
 
 function ligarDnD(){
@@ -891,15 +919,25 @@ function renderPainel(){
   const all = Object.values(CRM);
   const semSite = all.filter(l=>!l.website).length;
   const media = all.length ? Math.round(all.reduce((s,l)=>s+l._p.score,0)/all.length) : 0;
-  const fech = all.filter(l=>l.status==='fechado').length;
+  const fechados = all.filter(l=>l.status==='fechado');
+  const fech = fechados.length;
   const trab = all.filter(l=>l.status!=='novo').length;
+
+  const emNegoc   = all.filter(l=>l.status==='negociacao');
+  const soma      = xs => xs.reduce((t,l)=>t+(Number(l.valor)||0), 0);
+  const pipeline  = soma(emNegoc);
+  const ganho     = soma(fechados);
+  const comValor  = fechados.filter(l=>Number(l.valor)>0);
+  const ticket    = comValor.length ? ganho / comValor.length : 0;
 
   $('#kpis').innerHTML = `
     <div class="kpi"><div class="v">${all.length}</div><div class="l">Leads no funil</div></div>
+    <div class="kpi"><div class="v" style="color:var(--warm)">${moeda(pipeline)}</div><div class="l">Em negociação · ${emNegoc.length}</div></div>
+    <div class="kpi"><div class="v" style="color:var(--ok)">${moeda(ganho)}</div><div class="l">Fechado · ${fech}</div></div>
+    <div class="kpi"><div class="v">${moeda(ticket)}</div><div class="l">Ticket médio</div></div>
+    <div class="kpi"><div class="v">${trab?Math.round(fech/trab*100):0}%</div><div class="l">Conversão dos trabalhados</div></div>
     <div class="kpi"><div class="v" style="color:var(--hot)">${semSite}</div><div class="l">Sem site nenhum</div></div>
-    <div class="kpi"><div class="v">${media}</div><div class="l">Score médio</div></div>
-    <div class="kpi"><div class="v" style="color:var(--ok)">${fech}</div><div class="l">Fechados</div></div>
-    <div class="kpi"><div class="v">${trab?Math.round(fech/trab*100):0}%</div><div class="l">Conversão dos trabalhados</div></div>`;
+    <div class="kpi"><div class="v">${media}</div><div class="l">Score médio</div></div>`;
 
   const max = Math.max(1, ...ETAPAS.map(e=>all.filter(l=>l.status===e.k).length));
   $('#bars').innerHTML = ETAPAS.map(e=>{
@@ -909,6 +947,37 @@ function renderPainel(){
       <div class="vv">${n}</div></div>`;
   }).join('');
 
+  // negociações em aberto, da proposta maior para a menor
+  const abertas = emNegoc.slice().sort((a,b)=>(Number(b.valor)||0)-(Number(a.valor)||0));
+  const maiorV = Math.max(1, ...abertas.map(l=>Number(l.valor)||0));
+  $('#negoc').innerHTML = abertas.length ? abertas.map(l=>{
+    const d = diasAte(l.proxContato);
+    const atrasado = d != null && d < 0;
+    return `<div class="brow"><div class="lb" style="width:200px">${esc(l.nome.slice(0,28))}</div>
+      <div class="tr"><div class="fl" style="width:${(Number(l.valor)||0)/maiorV*100}%;background:var(--warm)"></div></div>
+      <div class="vv" style="width:auto;min-width:90px">${l.valor?moeda(l.valor):'—'}</div>
+      <div class="vv" style="width:auto;min-width:110px;color:${atrasado?'var(--bad)':'var(--dim2)'}">${
+        l.dataFech ? 'fecha '+dataBonita(l.dataFech) : (l.proxContato ? 'contato '+dataBonita(l.proxContato) : 'sem data')}</div>
+    </div>`;
+  }).join('')
+    : '<div class="empty" style="padding:20px">Nenhuma negociação aberta. Arraste um lead para "Negociação" e preencha valor e data na ficha.</div>';
+
+  // agenda: quem tem próximo contato marcado e ainda está vivo no funil
+  const agenda = all.filter(l=>l.proxContato && l.status!=='fechado' && l.status!=='perdido')
+                    .sort((a,b)=>a.proxContato.localeCompare(b.proxContato));
+  $('#agenda').innerHTML = agenda.length ? agenda.map(l=>{
+    const d = diasAte(l.proxContato);
+    const cor = d < 0 ? 'var(--bad)' : d === 0 ? 'var(--warm)' : 'var(--dim)';
+    const txt = d < 0 ? `atrasado ${-d} dia${-d>1?'s':''}` : d === 0 ? 'hoje' : `em ${d} dia${d>1?'s':''}`;
+    return `<div class="brow"><div class="lb" style="width:200px">${esc(l.nome.slice(0,28))}</div>
+      <div class="vv" style="width:auto;min-width:80px;color:var(--dim2)">${dataBonita(l.proxContato)}</div>
+      <div class="vv" style="width:auto;min-width:110px;color:${cor};font-weight:700">${txt}</div>
+      <div class="tr" style="flex:1"></div>
+      <div class="vv" style="width:auto;min-width:90px;color:var(--dim2)">${(ETAPAS.find(e=>e.k===l.status)||{}).t||''}</div>
+    </div>`;
+  }).join('')
+    : '<div class="empty" style="padding:20px">Nenhum contato agendado. Abra um lead no funil e preencha "Próximo contato".</div>';
+
   const top = all.filter(l=>l.status==='novo').sort((a,b)=>b._p.score-a._p.score).slice(0,8);
   $('#top').innerHTML = top.length ? top.map(l=>`
     <div class="brow"><div class="lb" style="width:190px">${esc(l.nome.slice(0,26))}</div>
@@ -916,6 +985,85 @@ function renderPainel(){
         l._p.faixa==='hot'?'var(--hot)':l._p.faixa==='warm'?'var(--warm)':'var(--cold)'}"></div></div>
       <div class="vv">${l._p.score}</div></div>`).join('')
     : '<div class="empty" style="padding:20px">Nada em "Novo". Busque leads e mande pro funil.</div>';
+}
+
+/* =========================================================
+   10B. ACERVO DE LANDINGS
+   O que você já produziu: modelo, proposta enviada ou entregue.
+   É daqui que sai o [link] da mensagem de prospecção.
+   ========================================================= */
+const LG_ESTADOS = {modelo:'Modelo', proposta:'Proposta', entregue:'Entregue'};
+let lgAtual = null;
+
+function lgSalvarTudo(){ Store.set('ll_landings', LG); }
+
+function renderLandings(){
+  const fn = $('#lgFiltro').value, fs = $('#lgStatus').value;
+  const vis = LG.filter(x => (!fn || (x.nichos||[]).includes(fn)) && (!fs || x.status === fs));
+
+  // o filtro de nicho lista só o que o acervo realmente cobre
+  const usados = Array.from(new Set(LG.flatMap(x => x.nichos || []))).sort(ptSort);
+  $('#lgFiltro').innerHTML = '<option value="">todos os nichos</option>' +
+    usados.map(n=>`<option value="${esc(n)}"${n===fn?' selected':''}>${esc(n)}</option>`).join('');
+
+  $('#lgN').textContent = LG.length ? `· ${vis.length} de ${LG.length}` : '';
+  $('#lgLista').innerHTML = vis.length ? vis.map(cardLanding).join('') :
+    `<div class="empty">${LG.length ? 'Nenhuma landing passou pelos filtros.'
+      : 'Nenhuma landing no acervo ainda.<br>Clique em "+ Nova landing" para registrar a primeira.'}</div>`;
+}
+
+function cardLanding(x){
+  const cliente = x.clienteId && CRM[x.clienteId] ? CRM[x.clienteId].nome : '';
+  const nichos = (x.nichos||[]);
+  return `
+  <div class="lgcard" data-id="${esc(x.id)}">
+    <div class="lgtopo" style="background:linear-gradient(135deg, ${esc(x.cor||'#7c6cff')}, ${esc(x.cor2||'#1b1f2a')})">
+      <span class="lgest ${esc(x.status||'modelo')}">${esc(LG_ESTADOS[x.status]||'Modelo')}</span>
+    </div>
+    <div class="lgcorpo">
+      <div class="lgnome">${esc(x.nome||'(sem nome)')}</div>
+      <div class="lgmeta">
+        <span class="lgswatch" style="background:${esc(x.cor||'#7c6cff')}"></span>
+        <span class="lgswatch" style="background:${esc(x.cor2||'#1b1f2a')}"></span>
+        <span>${esc(x.estilo||'—')}</span>
+        ${x.fonte ? `<span class="lgfonte">${esc(x.fonte)}</span>` : ''}
+      </div>
+      ${nichos.length ? `<div class="lgnichos">${nichos.slice(0,4).map(n=>`<span>${esc(n)}</span>`).join('')}${
+        nichos.length>4?`<span>+${nichos.length-4}</span>`:''}</div>` : ''}
+      ${cliente ? `<div class="lgcli">👤 ${esc(cliente)}</div>` : ''}
+      <div class="lgacts">
+        <button data-lg="edit">Abrir</button>
+        ${x.url ? `<button data-lg="ver">Visitar</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function abrirLanding(id){
+  const x = id ? LG.find(y=>y.id===id) : null;
+  lgAtual = id || null;
+  $('#lgTit').textContent = x ? x.nome || 'Landing' : 'Nova landing';
+  $('#lgNome').value  = x ? (x.nome||'')  : '';
+  $('#lgUrl').value   = x ? (x.url||'')   : '';
+  $('#lgSt').value    = x ? (x.status||'modelo') : 'modelo';
+  $('#lgEstilo').value= x ? (x.estilo||'minimalista') : 'minimalista';
+  $('#lgFonte').value = x ? (x.fonte||'') : '';
+  $('#lgNota').value  = x ? (x.nota||'')  : '';
+  const c1 = (x && x.cor)  || '#7c6cff', c2 = (x && x.cor2) || '#1b1f2a';
+  $('#lgCor').value = c1; $('#lgCorTxt').value = c1;
+  $('#lgCor2').value = c2; $('#lgCor2Txt').value = c2;
+
+  $('#lgCliente').innerHTML = '<option value="">nenhum — é modelo</option>' +
+    Object.values(CRM).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'))
+      .map(l=>`<option value="${esc(l.id)}"${x&&x.clienteId===l.id?' selected':''}>${esc(l.nome)}</option>`).join('');
+
+  const marcados = new Set(x ? (x.nichos||[]) : []);
+  $('#lgNichos').innerHTML = NICHOS.slice().sort(ptSort).map(n=>
+    `<label class="npick${marcados.has(n)?' on':''}"><input type="checkbox" value="${esc(n)}"${
+      marcados.has(n)?' checked':''}><span>${esc(n)}</span></label>`).join('');
+
+  $('#bLgDel').style.display = id ? '' : 'none';
+  openM('mLg');
 }
 
 /* =========================================================
@@ -933,7 +1081,8 @@ function exportarCSV(){
   const fonte = Object.values(CRM).length ? Object.values(CRM) : RES;
   if(!fonte.length){ toast('Nada para exportar ainda.'); return; }
   const cols = ['Nome','Categoria','Telefone','LinkWhatsApp','Site','Nota','Avaliacoes',
-                'Score','Faixa','Motivos','Endereco','Cidade','Etapa','Fonte','LinkMapa','DataCaptura'];
+                'Score','Faixa','Motivos','Endereco','Cidade','Etapa','Valor','PrevisaoFechamento',
+                'ProximoContato','Observacoes','Fonte','LinkMapa','DataCaptura'];
   const hoje = new Date().toISOString().slice(0,10);
   const linhas = fonte.map(l=>{
     const n = normFone(l.phone);
@@ -944,6 +1093,9 @@ function exportarCSV(){
       l.reviews != null ? l.reviews : '',
       l._p.score, nomeFaixa(l._p.faixa), l._p.motivos.map(m=>m.t).join(' | '),
       l.endereco, l.cidade, l.status ? (ETAPAS.find(e=>e.k===l.status)||{}).t : 'Não trabalhado',
+      // vírgula decimal: é o que o Excel e o Power BI em português esperam
+      l.valor ? String(Number(l.valor).toFixed(2)).replace('.',',') : '',
+      l.dataFech || '', l.proxContato || '', l.nota || '',
       l.fonte, l.mapa, hoje
     ].map(c=>{
       const s = String(c==null?'':c).replace(/"/g,'""');
@@ -964,16 +1116,9 @@ $$('nav button').forEach(b=>b.addEventListener('click', ()=>{
   $$('.view').forEach(v=>v.classList.remove('on'));
   $('#v-'+b.dataset.v).classList.add('on');
   if(b.dataset.v === 'crm') renderKb();
+  if(b.dataset.v === 'landings') renderLandings();
   if(b.dataset.v === 'painel') renderPainel();
 }));
-
-function pintarFonte(){
-  const goo = $('input[name=src][value=google]').checked;
-  $('#lbGoo').classList.toggle('on', goo);
-  $('#lbOsm').classList.toggle('on', !goo);
-  $('#fBairros').style.display = goo ? '' : 'none';
-}
-$$('input[name=src]').forEach(r=>r.addEventListener('change', pintarFonte));
 
 $('#cat').addEventListener('change', ()=> preencherNichos($('#cat').value));
 $('#qSel').addEventListener('change', ()=>{
@@ -995,6 +1140,91 @@ $$('.chip[data-flt]').forEach(c=>c.addEventListener('click', ()=>{
   c.classList.toggle('on', FLT[c.dataset.flt]);
   renderRes();
 }));
+$('#fScore').addEventListener('change', ()=>{ FLT.score = Number($('#fScore').value) || 0; renderRes(); });
+$('#fNota').addEventListener('change',  ()=>{ FLT.nota  = Number($('#fNota').value)  || 0; renderRes(); });
+$('#fAval').addEventListener('change',  ()=>{ FLT.aval  = $('#fAval').value; renderRes(); });
+/* ---- filtros do funil ---- */
+$('#kbQ').addEventListener('input', ()=>{ KFLT.q = $('#kbQ').value; renderKb(); });
+$('#kbNicho').addEventListener('change', ()=>{ KFLT.nicho = $('#kbNicho').value; renderKb(); });
+$('#kbOrdem').addEventListener('change', ()=>{ KFLT.ordem = $('#kbOrdem').value; renderKb(); });
+$$('.chip[data-kflt]').forEach(c=>c.addEventListener('click', ()=>{
+  KFLT[c.dataset.kflt] = !KFLT[c.dataset.kflt];
+  c.classList.toggle('on', KFLT[c.dataset.kflt]);
+  renderKb();
+}));
+$('#bKbLimpa').addEventListener('click', ()=>{
+  KFLT = {q:'', nicho:'', ordem:KFLT.ordem, atrasado:false, comValor:false, quente:false};
+  $('#kbQ').value = ''; $('#kbNicho').value = '';
+  $$('.chip[data-kflt]').forEach(c=>c.classList.remove('on'));
+  renderKb();
+});
+
+/* ---- acervo de landings ---- */
+$('#bLgNova').addEventListener('click', ()=> abrirLanding(null));
+$('#lgFiltro').addEventListener('change', renderLandings);
+$('#lgStatus').addEventListener('change', renderLandings);
+
+$('#lgLista').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-lg]'); if(!b) return;
+  const id = b.closest('.lgcard').dataset.id;
+  if(b.dataset.lg === 'edit') abrirLanding(id);
+  if(b.dataset.lg === 'ver'){
+    const x = LG.find(y=>y.id===id);
+    if(x && x.url) window.open(/^https?:/i.test(x.url) ? x.url : 'https://' + x.url, '_blank', 'noopener');
+  }
+});
+
+// o seletor de cor e o campo de texto andam juntos
+[['#lgCor','#lgCorTxt'], ['#lgCor2','#lgCor2Txt']].forEach(([c,t])=>{
+  $(c).addEventListener('input', ()=> $(t).value = $(c).value);
+  $(t).addEventListener('change', ()=>{
+    const v = $(t).value.trim();
+    if(/^#[0-9a-f]{6}$/i.test(v)) $(c).value = v;
+    else $(t).value = $(c).value;   // valor inválido volta ao que estava
+  });
+});
+
+$('#lgNichos').addEventListener('change', e=>{
+  const cx = e.target.closest('input[type=checkbox]');
+  if(cx) cx.closest('.npick').classList.toggle('on', cx.checked);
+});
+
+$('#bLgSalvar').addEventListener('click', ()=>{
+  const nome = $('#lgNome').value.trim();
+  if(!nome){ toast('Dê um nome para a landing.'); return; }
+  const dados = {
+    nome, url: $('#lgUrl').value.trim(), status: $('#lgSt').value,
+    cor: $('#lgCor').value, cor2: $('#lgCor2').value,
+    estilo: $('#lgEstilo').value, fonte: $('#lgFonte').value.trim(),
+    clienteId: $('#lgCliente').value, nota: $('#lgNota').value.trim(),
+    nichos: $$('#lgNichos input:checked').map(c=>c.value)
+  };
+  if(lgAtual){
+    Object.assign(LG.find(x=>x.id===lgAtual), dados);
+  }else{
+    dados.id = 'lg-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    dados.criada = hojeISO();
+    LG.unshift(dados);
+  }
+  lgSalvarTudo(); closeM('mLg'); renderLandings();
+  toast('Landing salva.');
+});
+
+$('#bLgDel').addEventListener('click', ()=>{
+  if(!lgAtual) return;
+  if(!confirm('Excluir esta landing do acervo?')) return;
+  LG = LG.filter(x=>x.id !== lgAtual);
+  lgSalvarTudo(); closeM('mLg'); renderLandings();
+  toast('Excluída do acervo.');
+});
+
+$('#bLimpaFlt').addEventListener('click', ()=>{
+  FLT = {nosite:false, fone:false, quente:false, zap:false,
+         semFunil:false, semWa:false, score:0, nota:0, aval:''};
+  $$('.chip[data-flt]').forEach(c=>c.classList.remove('on'));
+  $('#fScore').value = '0'; $('#fNota').value = '0'; $('#fAval').value = '';
+  renderRes();
+});
 
 function receber(leads){
   const vistos = new Set();
@@ -1003,7 +1233,8 @@ function receber(leads){
     if(vistos.has(ch)) return false;
     vistos.add(ch); return true;
   });
-  RES.forEach(l=> l._p = pontuar(l));
+  const nicho = nichoAtual();
+  RES.forEach(l=>{ l._p = pontuar(l); l._nicho = nicho; });
   RES.sort((a,b)=> b._p.score - a._p.score);
   renderRes();
 }
@@ -1012,23 +1243,19 @@ $('#bGo').addEventListener('click', async ()=>{
   const nicho  = nichoAtual();
   const cidade = cidadeAtual();
   const limite = Number($('#lim').value);
-  const src    = $('input[name=src]:checked').value;
   const bairros = $('#bairros').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(!nicho){  setStatus('Escolha o nicho na lista — ou "outro termo" para digitar.', 'err'); return; }
   if(!cidade){ setStatus('Escolha o estado e a cidade.', 'err'); return; }
 
   $('#bGo').disabled = true;
   try{
-    const leads = src === 'google'
-      ? await buscarGoogle(nicho, cidade, limite, bairros)
-      : await buscarOSM(nicho, cidade, limite);
-    receber(leads);
+    receber(await buscarGoogle(nicho, cidade, limite, bairros));
     if(!RES.length) setStatus('Nenhum resultado. Tente outro termo ou confira a grafia da cidade.', 'err');
     else{
       const quentes = RES.filter(l=>l._p.faixa==='hot').length;
       const semSite = RES.filter(l=>!l.website).length;
-      const consumo = src === 'google' ? ` · ${CHAMADAS.n} consultas ao Places hoje` : '';
-      setStatus(`${RES.length} leads · ${quentes} quentes · ${semSite} sem site${consumo}.`);
+      setStatus(`${RES.length} leads · ${quentes} quentes · ${semSite} sem site` +
+                ` · ${CHAMADAS.n} consultas ao Places hoje.`);
     }
   }catch(e){
     const m = (e && e.message) || '';
@@ -1036,18 +1263,12 @@ $('#bGo').addEventListener('click', async ()=>{
       setStatus('O navegador bloqueou a busca porque o arquivo foi aberto direto do disco. ' +
                 'Rode por um servidor local (veja o aviso amarelo no topo da página) e tente de novo.', 'err');
     } else if(/Failed to fetch|NetworkError|Load failed/i.test(m)){
-      setStatus('Não consegui falar com o servidor de dados. Verifique sua internet — ou o servidor gratuito do OpenStreetMap pode estar ocupado; espere um minuto.', 'err');
-    } else {
+      setStatus('Não consegui falar com o servidor. Verifique sua internet e tente de novo.', 'err');
       setStatus(m || 'Falhou. Tente de novo em alguns segundos.', 'err');
     }
   }finally{
     $('#bGo').disabled = false;
   }
-});
-
-$('#bDemo').addEventListener('click', ()=>{
-  receber(exemplos());
-  setStatus('Mostrando 10 leads de exemplo — é só pra você ver como funciona.');
 });
 
 $('#res').addEventListener('click', e=>{
@@ -1095,8 +1316,46 @@ $('#bAddAll').addEventListener('click', ()=>{
 $('#kb').addEventListener('click', e=>{
   const b = e.target.closest('button[data-k]'); if(!b) return;
   const id = b.closest('.kcard').dataset.id, l = CRM[id]; if(!l) return;
-  if(b.dataset.k === 'msg') abrirMsg(l);
-  if(b.dataset.k === 'del'){ delete CRM[id]; Store.set('ll_crm', CRM); renderKb(); renderPainel(); }
+  if(b.dataset.k === 'msg')  abrirMsg(l);
+  if(b.dataset.k === 'edit') abrirLead(id);
+});
+
+/* ---- ficha do lead no funil ---- */
+let leadAtual = null;
+function abrirLead(id){
+  const l = CRM[id]; if(!l) return;
+  leadAtual = id;
+  $('#leadTit').textContent = l.nome;
+  $('#leadSub').innerHTML = `${l._p.score} pts · ${esc(l.categoria||'—')}` +
+    (l.phone ? ` · ${esc(foneBonito(l.phone))}` : ' · sem telefone') +
+    (l.website ? ` · <a href="${esc(l.website)}" target="_blank" rel="noopener">site</a>` : ' · sem site');
+  $('#lEtapa').innerHTML = ETAPAS.map(e=>
+    `<option value="${e.k}"${l.status===e.k?' selected':''}>${e.t}</option>`).join('');
+  $('#lValor').value = l.valor || '';
+  $('#lDataF').value = l.dataFech || '';
+  $('#lProx').value  = l.proxContato || '';
+  $('#lNota').value  = l.nota || '';
+  openM('mLead');
+}
+
+$('#bLeadSalvar').addEventListener('click', ()=>{
+  const l = CRM[leadAtual]; if(!l) return;
+  l.status      = $('#lEtapa').value;
+  l.valor       = Number($('#lValor').value) || 0;
+  l.dataFech    = $('#lDataF').value;
+  l.proxContato = $('#lProx').value;
+  l.nota        = $('#lNota').value.trim();
+  Store.set('ll_crm', CRM);
+  closeM('mLead'); renderKb(); renderPainel(); renderRes();
+  toast('Ficha salva.');
+});
+
+$('#bLeadDel').addEventListener('click', ()=>{
+  if(!CRM[leadAtual]) return;
+  if(!confirm('Remover este lead do funil? As observações e valores vão junto.')) return;
+  delete CRM[leadAtual]; Store.set('ll_crm', CRM);
+  closeM('mLead'); renderKb(); renderPainel(); renderRes();
+  toast('Removido do funil.');
 });
 
 $('#bLimpar').addEventListener('click', ()=>{
@@ -1110,7 +1369,7 @@ $('#bExp').addEventListener('click', exportarCSV);
 $('#bBkp').addEventListener('click', ()=>openM('mBkp'));
 $('#bBaixar').addEventListener('click', ()=>{
   baixar('leadlocal-backup-'+new Date().toISOString().slice(0,10)+'.json',
-         JSON.stringify({cfg:CFG, crm:CRM}, null, 2), 'application/json');
+         JSON.stringify({cfg:CFG, crm:CRM, landings:LG}, null, 2), 'application/json');
   toast('Backup baixado.');
 });
 $('#bRest').addEventListener('click', ()=>$('#fBkp').click());
@@ -1122,6 +1381,7 @@ $('#fBkp').addEventListener('change', e=>{
       const d = JSON.parse(fr.result);
       if(d.crm){ CRM = d.crm; Object.values(CRM).forEach(l=>{ if(!l._p) l._p = pontuar(l); }); Store.set('ll_crm', CRM); }
       if(d.cfg){ CFG = Object.assign(CFG, d.cfg); Store.set('ll_cfg', CFG); }
+      if(d.landings){ LG = d.landings; lgSalvarTudo(); renderLandings(); }
       renderKb(); renderPainel(); closeM('mBkp'); toast('Backup restaurado.');
     }catch(err){ toast('Arquivo inválido.'); }
   };
@@ -1141,8 +1401,44 @@ $('#bCfg').addEventListener('click', ()=>{
   $('#cUazInt').value   = CFG.uazInt   || 60;
   $('#cUazLim').value   = CFG.uazLim   || 30;
   $('#uazStatus').textContent = '';
+  renderSites(CFG.sites);
   openM('mCfg');
 });
+/* ---- site padrão por nicho ---- */
+function linhaSite(nicho, url){
+  const opts = NICHOS.slice().sort(ptSort)   // slice: sort() mutaria o NICHOS
+    .map(n=>`<option value="${esc(n)}"${n===nicho?' selected':''}>${esc(n)}</option>`).join('');
+  const d = document.createElement('div');
+  d.className = 'siterow';
+  d.innerHTML = `<select class="sn">${opts}</select>` +
+                `<input class="su" placeholder="https://exemplo.com.br" value="${esc(url||'')}">` +
+                `<button type="button" class="sx" title="remover">✕</button>`;
+  d.querySelector('.sx').addEventListener('click', ()=> d.remove());
+  return d;
+}
+
+function renderSites(mapa){
+  const cx = $('#cSites');
+  cx.innerHTML = '';
+  const pares = Object.entries(mapa || {});
+  if(!pares.length) cx.appendChild(linhaSite('', ''));
+  else pares.forEach(([n,u]) => cx.appendChild(linhaSite(n, u)));
+}
+
+/* Lê as linhas da tela. Linha sem endereço é descartada — cadastrar nicho
+   sem site não serviria para nada, e a etiqueta [link] continuaria aparecendo. */
+function lerSites(){
+  const out = {};
+  $$('#cSites .siterow').forEach(d=>{
+    const n = d.querySelector('.sn').value;
+    const u = d.querySelector('.su').value.trim();
+    if(n && u) out[n] = u;
+  });
+  return out;
+}
+
+$('#bSiteAdd').addEventListener('click', ()=> $('#cSites').appendChild(linhaSite('', '')));
+
 $('#bSalvarCfg').addEventListener('click', ()=>{
   CFG = {nome:$('#cNome').value.trim(), serv:$('#cServ').value.trim(),
          site:$('#cSite').value.trim(), key:$('#cKey').value.trim(),
@@ -1151,7 +1447,8 @@ $('#bSalvarCfg').addEventListener('click', ()=>{
          msgPadrao:$('#cMsg').value.trim(),
          uazUrl:$('#cUazUrl').value.trim(), uazToken:$('#cUazToken').value.trim(),
          uazInt:Math.max(20, Number($('#cUazInt').value) || 60),
-         uazLim:Math.max(1,  Number($('#cUazLim').value) || 30)};
+         uazLim:Math.max(1,  Number($('#cUazLim').value) || 30),
+         sites:lerSites()};
   Store.set('ll_cfg', CFG); closeM('mCfg'); pintarEnvio(); toast('Configurações salvas.');
 });
 
@@ -1187,15 +1484,29 @@ $('#bUazTeste').addEventListener('click', async ()=>{
   }finally{ b.disabled = false; }
 });
 
-/* mostra os botões de envio só quando o gateway está configurado */
+/* Os botões de envio ficam sempre visíveis. Escondê-los quando falta
+   configuração só faz o recurso sumir sem explicação — quem clica sem
+   ter configurado é levado direto ao Config. */
 function pintarEnvio(){
   const on = uazPronto();
-  $('#bLote').style.display   = on ? '' : 'none';
-  $('#bEnviar').style.display = on ? '' : 'none';
+  $('#bLote').style.display   = '';
+  $('#bEnviar').style.display = '';
+  $('#bEnviar').title = on ? '' : 'Precisa configurar a uazapi em ⚙ Config';
+  $('#bLote').title   = on ? '' : 'Precisa configurar a uazapi em ⚙ Config';
+}
+
+/* true = pode enviar. false = leva o usuário para o Config explicando. */
+function exigirUaz(){
+  if(uazPronto()) return true;
+  toast('Configure a uazapi em ⚙ Config para enviar daqui.');
+  $$('.mask').forEach(m => m.classList.remove('on'));
+  $('#bCfg').click();
+  return false;
 }
 
 $('#bEnviar').addEventListener('click', async ()=>{
   if(!msgAtual) return;
+  if(!exigirUaz()) return;
   if(!normFone(msgAtual.phone)){ toast('Esse lead não tem telefone com DDD.'); return; }
   if(enviosHoje() >= uazLim()){ toast(`Teto de ${uazLim()} envios por dia já atingido.`); return; }
   const b = $('#bEnviar'), antes = b.textContent;
@@ -1210,11 +1521,14 @@ $('#bEnviar').addEventListener('click', async ()=>{
     closeM('mMsg');
     toast(`Enviada. ${enviosHoje()} de ${uazLim()} hoje.`);
   }catch(e){
-    toast((e && e.message) || 'Não consegui enviar.');
+    const msg = (e && e.message) || 'Não consegui enviar.';
+    if(/não tem WhatsApp/i.test(msg)){ marcarSemWa(msgAtual.phone); renderRes(); }
+    toast(msg);
   }finally{ b.disabled = false; b.textContent = antes; }
 });
 
 $('#bLote').addEventListener('click', ()=>{
+  if(!exigirUaz()) return;
   const leads = elegiveis(visiveis());
   if(!leads.length){ toast('Nenhum lead visível com telefone e ainda não contatado.'); return; }
   filaAbrir(leads);
@@ -1257,7 +1571,6 @@ document.addEventListener('keydown', e=>{
    13. INÍCIO
    ========================================================= */
 Object.values(CRM).forEach(l=>{ if(!l._p) l._p = pontuar(l); });
-pintarFonte();
 pintarEnvio();
 preencherCategorias();
 preencherNichos('');
@@ -1282,11 +1595,11 @@ if(location.protocol === 'file:'){
     'direito neste arquivo e escolha "Open with Live Server".<br>' +
     '<b>Ou pelo Prompt de Comando</b>, dentro da pasta do arquivo: <code>python -m http.server 8000</code> ' +
     'e abra <code>http://localhost:8000/index.html</code>.<br><br>' +
-    'Enquanto isso, o botão "Ver com dados de exemplo" continua funcionando normalmente.</div>';
+    'Sem isso nenhuma busca completa.</div>';
 }
 if(CHAMADAS.dia !== new Date().toISOString().slice(0,10)){ CHAMADAS = {dia:'', n:0}; }
 if(!CFG.key){
-  setStatus('Cole sua chave do Places em ⚙ Config para buscar no Google — ou clique em "Ver com dados de exemplo" para conhecer a ferramenta agora.');
+  setStatus('Cole sua chave do Google Places em ⚙ Config para começar a buscar.');
 }
 if(!Store.ok){
   $('#noStore').innerHTML = '<div class="warn"><b>Aviso:</b> este navegador está bloqueando o armazenamento local, ' +
