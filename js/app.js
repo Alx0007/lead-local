@@ -2023,3 +2023,30 @@ $('#bDiag').addEventListener('click', async ()=>{
   nlog('sk', 'fim do diagnóstico');
   b.disabled = false;
 });
+
+/* No celular, ler erro longo na tela é ruim e transcrever é pior.
+   Este botão copia o log inteiro para colar em qualquer lugar. */
+$('#bCopiarDiag').addEventListener('click', async ()=>{
+  const linhas = Array.from(document.querySelectorAll('#nuvemLog div'))
+    .map(d => d.innerText.replace(/\s+/g,' ').trim());
+  if(!linhas.length){ toast('Rode o diagnóstico primeiro.'); return; }
+  const texto = [
+    'Lead Local — diagnóstico',
+    'aparelho: ' + navigator.userAgent,
+    'endereço: ' + location.origin,
+    ''
+  ].concat(linhas).join('
+');
+  try{
+    await navigator.clipboard.writeText(texto);
+    toast('Resultado copiado. Cole onde quiser.');
+  }catch(e){
+    // iOS às vezes recusa a área de transferência fora de um toque direto
+    const t = document.createElement('textarea');
+    t.value = texto; t.style.cssText = 'position:fixed;top:10px;left:10px;width:90%;height:60%;z-index:999';
+    document.body.appendChild(t); t.select();
+    try{ document.execCommand('copy'); toast('Copiado.'); }
+    catch(x){ toast('Selecione o texto e copie na mão.'); }
+    setTimeout(()=>t.remove(), 200);
+  }
+});

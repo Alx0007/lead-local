@@ -260,11 +260,14 @@ details.help ol{margin:9px 0 0;padding-left:19px;color:var(--dim);font-size:12.5
 .lotelog{max-height:230px;overflow-y:auto;background:var(--bg2);border:1px solid var(--line);
   border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.75;display:none}
 .lotelog.on{display:block}
-.lotelog div{display:flex;gap:8px}
+.lotelog div{display:flex;gap:8px;align-items:flex-start}
 .lotelog .ok{color:var(--ok)}
 .lotelog .er{color:var(--hot)}
 .lotelog .sk{color:var(--dim2)}
-.lotelog .nm{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lotelog .nm{flex:1;min-width:0;color:var(--dim);
+  overflow-wrap:anywhere;word-break:break-word;white-space:normal;line-height:1.5}
+.lotelog{max-height:none}
+@media(max-width:720px){ .lotelog{font-size:12px} }
 
 @media(max-width:720px){
   .kb{grid-template-columns:repeat(6,minmax(170px,1fr))}
