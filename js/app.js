@@ -402,10 +402,37 @@ let ENVIOS = Store.get('ll_envios', {dia:'', n:0});
 
 const hojeISO   = () => new Date().toISOString().slice(0,10);
 const enviosHoje = () => (ENVIOS.dia === hojeISO() ? ENVIOS.n : 0);
-function contarEnvio(){
-  if(ENVIOS.dia !== hojeISO()) ENVIOS = {dia: hojeISO(), n:0};
-  ENVIOS.n++;
+/* O teto é da EQUIPE, não do aparelho: o número de WhatsApp é um só.
+   Quem manda é o contador do banco; o valor local é apenas o último que
+   vimos, para a tela ter o que mostrar enquanto a resposta não chega. */
+async function atualizarEnvios(){
+  if(!navigator.onLine || !Nuvem.logado) return enviosHoje();
+  try{
+    const n = await Nuvem.enviosHoje();
+    ENVIOS = {dia: hojeISO(), n};
+    Store.set('ll_envios', ENVIOS);
+  }catch(e){ console.warn('[envios] não consegui ler do servidor:', e.message); }
+  return enviosHoje();
+}
+
+async function contarEnvio(){
+  const n = await Nuvem.contarEnvio();      // soma e devolve numa operação só
+  ENVIOS = {dia: hojeISO(), n};
   Store.set('ll_envios', ENVIOS);
+  return n;
+}
+
+/* Devolve o motivo pelo qual NÃO dá para enviar agora, ou string vazia. */
+function bloqueioDeEnvio(){
+  if(!uazPronto())     return 'Configure a uazapi em ⚙ Config para enviar.';
+  if(!Nuvem.logado)    return 'Entre na conta da equipe para enviar.';
+  if(!navigator.onLine)
+    return 'Sem conexão. O envio precisa de internet porque o teto diário é ' +
+           'compartilhado com a equipe — sem consultar o servidor, o número ' +
+           'poderia levar o dobro de mensagens e ser restringido.';
+  if(enviosHoje() >= uazLim())
+    return `A equipe já usou os ${uazLim()} envios de hoje. O contador zera amanhã.`;
+  return '';
 }
 
 const uazBase   = () => (CFG.uazUrl || 'https://free.uazapi.com').replace(/\/+$/, '');
@@ -538,6 +565,17 @@ function filaTique(){
   const b = $('#bLoteEnviar');
   const falta = Math.ceil((FILA.liberaEm - Date.now()) / 1000);
   if(FILA.enviando){ b.disabled = true; b.textContent = 'Enviando…'; return; }
+
+  // sem conexão ou sem vaga no teto: o botão diz o porquê, não fica só cinza
+  const impedimento = bloqueioDeEnvio();
+  if(impedimento){
+    b.disabled = true;
+    b.textContent = navigator.onLine ? 'Teto da equipe atingido' : 'Sem conexão';
+    b.title = impedimento;
+    FILA.timer = setTimeout(filaTique, 2000);   // volta sozinho quando a rede voltar
+    return;
+  }
+  b.title = '';
   if(falta > 0){
     b.disabled = true;
     b.textContent = `Aguarde ${falta}s`;
@@ -561,10 +599,14 @@ async function filaEnviar(){
   if(/\[link\]/i.test(texto) &&
      !confirm('O texto ainda tem [link] sem preencher. Enviar assim mesmo?')) return;
 
+  await atualizarEnvios();
+  const impedimento = bloqueioDeEnvio();
+  if(impedimento){ toast(impedimento); filaMostrar(); return; }
+
   FILA.enviando = true; filaTique();
   // toda tentativa conta para o teto, dando certo ou não: o que pesa para o
   // WhatsApp é o tráfego que sai do número
-  contarEnvio();
+  await contarEnvio();
   try{
     await uazEnviar(l.phone, texto);
     CRM[l.id] = Object.assign({}, CRM[l.id] || l, {status:'contatado'});
@@ -1532,12 +1574,14 @@ $('#bEnviar').addEventListener('click', async ()=>{
   if(!msgAtual) return;
   if(!exigirUaz()) return;
   if(!normFone(msgAtual.phone)){ toast('Esse lead não tem telefone com DDD.'); return; }
-  if(enviosHoje() >= uazLim()){ toast(`Teto de ${uazLim()} envios por dia já atingido.`); return; }
+  await atualizarEnvios();
+  const impedimento = bloqueioDeEnvio();
+  if(impedimento){ toast(impedimento); return; }
   const b = $('#bEnviar'), antes = b.textContent;
   b.disabled = true; b.textContent = 'Enviando…';
   try{
+    await contarEnvio();                      // reserva a vaga antes de disparar
     await uazEnviar(msgAtual.phone, $('#msgTxt').value);
-    contarEnvio();
     CRM[msgAtual.id] = Object.assign({}, CRM[msgAtual.id] || msgAtual, {status:'contatado'});
     if(!CRM[msgAtual.id]._p) CRM[msgAtual.id]._p = msgAtual._p;
     Store.set('ll_crm', CRM);
@@ -1666,6 +1710,7 @@ async function iniciarComNuvem(){
     Store.set('ll_semwa', Array.from(SEM_WA));
     renderRes(); renderKb(); renderPainel(); renderLandings();
 
+    await atualizarEnvios();
     const aSubir = Sinc.pendentes;
     if(aSubir) toast(`Subindo ${aSubir} registro${aSubir>1?'s':''} deste aparelho para a nuvem…`);
     const pend = await Sinc.esvaziar();
