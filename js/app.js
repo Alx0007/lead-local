@@ -23,6 +23,9 @@ const Store = (() => {
     set(k, v){
       const s = JSON.stringify(v);
       try { if(ok) localStorage.setItem(k, s); else mem[k] = s; } catch(e){ mem[k] = s; }
+      // toda gravação do app passa por aqui: é onde a nuvem entra,
+      // sem que o resto do código saiba que existe rede
+      try { if(window.Sinc) Sinc.registrar(k, v); } catch(e){ console.warn('[sinc]', e); }
     }
   };
 })();
@@ -431,12 +434,33 @@ function traduzirErroUaz(msg, http){
   return m || ('HTTP ' + http);
 }
 
+/* Cada gateway devolve o erro num campo diferente, e alguns mandam
+   {"error": true, "message": "..."} — pegar o primeiro campo verdadeiro
+   daria a string "true" em vez do motivo. Aqui só serve texto. */
+function textoDoErro(j, status){
+  const campos = [j && j.error, j && j.message, j && j.msg,
+                  j && j.detail, j && j.description,
+                  j && j.error && j.error.message];
+  const achou = campos.find(v => typeof v === 'string' && v.trim());
+  if(achou) return achou.trim();
+  // sem texto aproveitável: mostra o corpo cru, que é melhor que "true"
+  let cru = '';
+  try{ cru = j && Object.keys(j).length ? JSON.stringify(j).slice(0, 220) : ''; }catch(e){}
+  return cru ? `HTTP ${status} — ${cru}` : `HTTP ${status}`;
+}
+
 async function uazChamar(caminho, opcoes){
   const o = Object.assign({}, opcoes);
   o.headers = Object.assign({'token': CFG.uazToken}, o.headers || {});
   const r = await fetch(uazBase() + caminho, o);
   const j = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(traduzirErroUaz(j.error || j.message, r.status));
+  // alguns gateways devolvem 200 com erro no corpo; isso também é falha
+  const falhou = !r.ok || (j && j.error === true) ||
+                 (typeof j?.status === 'string' && /^erro|^error/i.test(j.status));
+  if(falhou){
+    console.warn('[uazapi] resposta de erro', r.status, j);   // corpo inteiro no console
+    throw new Error(traduzirErroUaz(textoDoErro(j, r.status), r.status));
+  }
   return j;
 }
 
@@ -1570,6 +1594,107 @@ document.addEventListener('keydown', e=>{
 /* =========================================================
    13. INÍCIO
    ========================================================= */
+
+/* ---- porta de entrada: sem login, o app não abre ---- */
+function mostrarApp(usuario){
+  $('#login').classList.remove('on');
+  $('#quem').textContent = (usuario.email||'').split('@')[0];
+  $('#quem').title = usuario.email || '';
+}
+function mostrarLogin(){
+  $('#login').classList.add('on');
+  $('#logSenha').value = '';
+}
+
+$('#loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const b = $('#bLogin'), antes = b.textContent;
+  $('#logErr').textContent = '';
+  b.disabled = true; b.textContent = 'Entrando…';
+  try{
+    const u = await Nuvem.entrar($('#logEmail').value.trim(), $('#logSenha').value);
+    mostrarApp(u);
+    await iniciarComNuvem();
+  }catch(err){
+    $('#logErr').textContent = err.message || 'Não consegui entrar.';
+  }finally{ b.disabled = false; b.textContent = antes; }
+});
+
+$('#bSair').addEventListener('click', async ()=>{
+  if(!confirm('Sair da conta? Os dados ficam no servidor.')) return;
+  await Nuvem.sair();
+  mostrarLogin();
+});
+
+/* Ao entrar: traz o que está no banco, mescla com o que existe no
+   aparelho e sobe o que ficou pendente offline. */
+async function iniciarComNuvem(){
+  pintarSinc();
+  Sinc.aoMudar(pintarSinc);
+  try{
+    const [ls, gs] = await Promise.all([Nuvem.ler('leads'), Nuvem.ler('landings')]);
+
+    // conflito por horário: o que chega mais velho que o local não sobrescreve
+    let novos = 0;
+    ls.forEach(r=>{
+      const vindo = Mapa.leadDoBanco(r), atual = CRM[vindo.id];
+      if(!atual){ CRM[vindo.id] = vindo; novos++; return; }
+      if(!atual._alteradoEm || (vindo._alteradoEm > atual._alteradoEm)) CRM[vindo.id] = vindo;
+    });
+    const porId = new Map(LG.map(x=>[x.id,x]));
+    gs.forEach(r=>{
+      const vindo = Mapa.landingDoBanco(r), atual = porId.get(vindo.id);
+      if(!atual || !atual._alteradoEm || vindo._alteradoEm > atual._alteradoEm) porId.set(vindo.id, vindo);
+    });
+    LG = Array.from(porId.values());
+
+    Sinc.semear(CRM, LG, Array.from(SEM_WA));
+    Store.set('ll_crm', CRM); Store.set('ll_landings', LG);
+    renderRes(); renderKb(); renderPainel(); renderLandings();
+
+    const pend = await Sinc.esvaziar();
+    console.log('[nuvem] ' + ls.length + ' leads e ' + gs.length + ' landings no banco; ' +
+                novos + ' novos aqui; ' + pend + ' pendentes de subida');
+    ligarTempoReal();
+  }catch(e){
+    toast('Entrou, mas não consegui ler o banco: ' + e.message);
+  }
+}
+
+/* Alteração do colega aparece sem precisar recarregar. */
+let tempoRealLigado = false;
+function ligarTempoReal(){
+  if(tempoRealLigado) return;
+  tempoRealLigado = true;
+  Nuvem.escutar('leads', carga=>{
+    const r = carga.new;
+    if(!r || !r.id) return;
+    if(carga.eventType === 'DELETE'){ delete CRM[carga.old.id]; }
+    else{
+      const vindo = Mapa.leadDoBanco(r), atual = CRM[vindo.id];
+      if(atual && atual._alteradoEm && vindo._alteradoEm <= atual._alteradoEm) return;
+      CRM[vindo.id] = vindo;
+    }
+    Store.set('ll_crm', CRM);
+    renderRes(); renderKb(); renderPainel();
+  });
+  Nuvem.escutar('landings', async ()=>{
+    LG = (await Nuvem.ler('landings')).map(Mapa.landingDoBanco);
+    Store.set('ll_landings', LG); renderLandings();
+  });
+}
+
+/* Aviso de conexão e de fila pendente, no cabeçalho. */
+function pintarSinc(){
+  const el = $('#sinc'); if(!el) return;
+  const p = Sinc.pendentes;
+  if(!navigator.onLine){ el.textContent = 'sem conexão' + (p?` · ${p} a enviar`:''); el.className = 'sinc off'; }
+  else if(p){ el.textContent = `enviando ${p}…`; el.className = 'sinc pend'; }
+  else { el.textContent = 'sincronizado'; el.className = 'sinc ok'; }
+}
+window.addEventListener('online',  pintarSinc);
+window.addEventListener('offline', pintarSinc);
+
 Object.values(CRM).forEach(l=>{ if(!l._p) l._p = pontuar(l); });
 pintarEnvio();
 preencherCategorias();
@@ -1606,3 +1731,71 @@ if(!Store.ok){
     'então seu funil não sobrevive ao fechar a aba. Use o botão <b>Backup</b> para salvar em arquivo antes de sair.</div>';
 }
 renderKb(); renderPainel();
+
+(async function verificarSessao(){
+  try{
+    const u = await Nuvem.sessao();
+    if(u){ mostrarApp(u); await iniciarComNuvem(); }
+    else mostrarLogin();
+  }catch(e){
+    mostrarLogin();
+    $('#logErr').textContent = 'Não consegui falar com o servidor. Verifique sua internet.';
+  }
+})();
+
+/* =========================================================
+   14. MIGRAÇÃO E AUTOTESTE DA NUVEM
+   ========================================================= */
+function nlog(classe, txt){
+  const cx = $('#nuvemLog'); cx.classList.add('on');
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="${classe}">${classe==='ok'?'✓':classe==='er'?'✕':'—'}</span>` +
+                `<span class="nm">${esc(txt)}</span>`;
+  cx.appendChild(d); cx.scrollTop = cx.scrollHeight;
+}
+
+$('#bMigrar').addEventListener('click', async ()=>{
+  if(!Nuvem.logado){ toast('Entre na conta primeiro.'); return; }
+  const n = Object.keys(CRM).length, g = LG.length, w = SEM_WA.size;
+  if(!n && !g && !w){ toast('Não há nada neste aparelho para subir.'); return; }
+  if(!confirm(`Subir ${n} leads, ${g} landings e ${w} números sem WhatsApp para a nuvem?
+
+` +
+              'Registro que já existir lá será atualizado com a versão daqui.')) return;
+  const b = $('#bMigrar'); b.disabled = true;
+  $('#nuvemLog').innerHTML = '';
+  nlog('sk', `enviando ${n} leads, ${g} landings, ${w} telefones…`);
+  try{
+    const restam = await Sinc.migrar(CRM, LG, Array.from(SEM_WA));
+    if(restam) nlog('er', `${restam} não subiram — confira a conexão e tente de novo`);
+    else nlog('ok', 'tudo no banco');
+  }catch(e){ nlog('er', e.message); }
+  finally{ b.disabled = false; pintarSinc(); }
+});
+
+$('#bAutoteste').addEventListener('click', async ()=>{
+  const b = $('#bAutoteste'); b.disabled = true;
+  $('#nuvemLog').innerHTML = '';
+  const id = 'teste-' + Date.now().toString(36);
+  try{
+    nlog(Nuvem.logado ? 'ok' : 'er', Nuvem.logado ? 'sessão ativa: ' + Nuvem.usuario.email : 'sem sessão');
+    if(!Nuvem.logado) throw new Error('entre na conta primeiro');
+
+    await Nuvem.gravar('leads', {id, nome:'Teste de conexão', status:'novo'});
+    nlog('ok', 'escrita aceita');
+
+    const achou = (await Nuvem.ler('leads')).some(r=>r.id===id);
+    nlog(achou?'ok':'er', achou ? 'leitura confirmou o registro' : 'gravou mas não li de volta');
+
+    await Nuvem.apagar('leads', 'id', id);
+    nlog('ok', 'remoção aceita');
+
+    const envios = await Nuvem.enviosHoje();
+    nlog('ok', `contador compartilhado responde: ${envios} envios hoje`);
+
+    nlog('ok', 'tudo certo — a nuvem está funcionando');
+  }catch(e){
+    nlog('er', e.message);
+    try{ await Nuvem.apagar('leads','id',id); }catch(x){}
+  }finally{ b.disabled = false; }
+});

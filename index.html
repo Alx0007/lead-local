@@ -12,6 +12,18 @@
 </head>
 <body>
 
+<div class="login" id="login">
+  <form class="loginbox" id="loginForm">
+    <div class="logo" style="font-size:22px;margin-bottom:4px">Lead<b>Local</b><span class="tag">estúdio</span></div>
+    <p class="sub" style="margin:0 0 20px">Entre com a conta da equipe para ver o funil compartilhado.</p>
+    <div class="f"><label>E-mail</label><input id="logEmail" type="email" autocomplete="username" required></div>
+    <div class="f" style="margin-top:12px"><label>Senha</label><input id="logSenha" type="password" autocomplete="current-password" required></div>
+    <button class="btn" id="bLogin" style="width:100%;margin-top:18px">Entrar</button>
+    <div class="logerr" id="logErr"></div>
+  </form>
+</div>
+
+
 <header>
   <div class="logo">Lead<b>Local</b><span class="tag">estúdio</span></div>
   <nav>
@@ -24,6 +36,9 @@
   <button class="hbtn" id="bExp">Exportar CSV</button>
   <button class="hbtn" id="bBkp">Backup</button>
   <button class="hbtn" id="bCfg">⚙ Config</button>
+  <span class="sinc" id="sinc"></span>
+  <span class="quem" id="quem" title="conta conectada"></span>
+  <button class="hbtn" id="bSair" title="sair da conta">Sair</button>
 </header>
 
 <main>
@@ -485,6 +500,15 @@
       <button class="btn ghost" id="bRest">Restaurar de arquivo</button>
       <input type="file" id="fBkp" accept=".json" style="display:none">
     </div>
+
+    <h2 style="margin-top:22px">Nuvem da equipe</h2>
+    <p class="sub">O funil e o acervo ficam num banco compartilhado. Estes botões servem para a primeira vez e para conferir se está tudo certo.</p>
+    <div style="display:flex;gap:9px;flex-wrap:wrap">
+      <button class="btn ghost" id="bMigrar">Subir meus dados para a nuvem</button>
+      <button class="btn ghost" id="bAutoteste">Testar a conexão</button>
+    </div>
+    <div id="nuvemLog" class="lotelog" style="margin-top:12px"></div>
+
     <div class="foot"><button class="btn ghost" onclick="closeM('mBkp')">Fechar</button></div>
   </div>
 </div>
@@ -516,6 +540,8 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=14"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/nuvem.js?v=3"></script>
+<script src="js/app.js?v=19"></script>
 </body>
 </html>
