@@ -1632,29 +1632,47 @@ async function iniciarComNuvem(){
   pintarSinc();
   Sinc.aoMudar(pintarSinc);
   try{
-    const [ls, gs] = await Promise.all([Nuvem.ler('leads'), Nuvem.ler('landings')]);
+    const [ls, gs, ws] = await Promise.all([
+      Nuvem.ler('leads'), Nuvem.ler('landings'), Nuvem.ler('sem_whatsapp')]);
 
-    // conflito por horário: o que chega mais velho que o local não sobrescreve
-    let novos = 0;
-    ls.forEach(r=>{
-      const vindo = Mapa.leadDoBanco(r), atual = CRM[vindo.id];
-      if(!atual){ CRM[vindo.id] = vindo; novos++; return; }
-      if(!atual._alteradoEm || (vindo._alteradoEm > atual._alteradoEm)) CRM[vindo.id] = vindo;
+    /* A sombra é semeada com o que o BANCO tem — não com o resultado da
+       mescla. É isso que faz a migração acontecer sozinha: tudo que existe
+       só neste aparelho vira diferença e entra na fila no Store.set abaixo.
+       Semear com o estado mesclado deixaria os dados locais presos aqui. */
+    const crmBanco = {}; ls.forEach(r=> crmBanco[r.id] = Mapa.leadDoBanco(r));
+    const lgBanco  = gs.map(Mapa.landingDoBanco);
+    const waBanco  = ws.map(r=>r.fone);
+    Sinc.semear(crmBanco, lgBanco, waBanco);
+
+    // mescla: em empate de id, vence quem foi alterado por último
+    let sobemDaqui = 0;
+    Object.values(crmBanco).forEach(vindo=>{
+      const atual = CRM[vindo.id];
+      if(!atual || !atual._alteradoEm || vindo._alteradoEm > atual._alteradoEm) CRM[vindo.id] = vindo;
     });
+    Object.values(CRM).forEach(l=>{ if(!crmBanco[l.id]) sobemDaqui++; });
+
     const porId = new Map(LG.map(x=>[x.id,x]));
-    gs.forEach(r=>{
-      const vindo = Mapa.landingDoBanco(r), atual = porId.get(vindo.id);
+    lgBanco.forEach(vindo=>{
+      const atual = porId.get(vindo.id);
       if(!atual || !atual._alteradoEm || vindo._alteradoEm > atual._alteradoEm) porId.set(vindo.id, vindo);
     });
     LG = Array.from(porId.values());
+    waBanco.forEach(f=> SEM_WA.add(f));
 
-    Sinc.semear(CRM, LG, Array.from(SEM_WA));
-    Store.set('ll_crm', CRM); Store.set('ll_landings', LG);
+    // este Store.set é o que enfileira a diferença
+    Store.set('ll_crm', CRM);
+    Store.set('ll_landings', LG);
+    Store.set('ll_semwa', Array.from(SEM_WA));
     renderRes(); renderKb(); renderPainel(); renderLandings();
 
+    const aSubir = Sinc.pendentes;
+    if(aSubir) toast(`Subindo ${aSubir} registro${aSubir>1?'s':''} deste aparelho para a nuvem…`);
     const pend = await Sinc.esvaziar();
-    console.log('[nuvem] ' + ls.length + ' leads e ' + gs.length + ' landings no banco; ' +
-                novos + ' novos aqui; ' + pend + ' pendentes de subida');
+    if(aSubir && !pend) toast(`${aSubir} registro${aSubir>1?'s':''} na nuvem. Tudo sincronizado.`);
+    console.log('[nuvem] banco: ' + ls.length + ' leads, ' + gs.length + ' landings · ' +
+                'só neste aparelho: ' + sobemDaqui + ' · subiram: ' + (aSubir - pend) +
+                ' · ainda pendentes: ' + pend);
     ligarTempoReal();
   }catch(e){
     toast('Entrou, mas não consegui ler o banco: ' + e.message);
