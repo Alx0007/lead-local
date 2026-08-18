@@ -1951,3 +1951,17 @@ $('#bVerBanco').addEventListener('click', async ()=>{
   }catch(e){ nlog('er', e.message); }
   finally{ b.disabled = false; }
 });
+
+/* Assume os leads que estão sem responsável. Os que já têm dono ficam
+   como estão — tomar lead do colega não deve ser efeito colateral de
+   um botão. Para transferir um específico, use o seletor na ficha. */
+$('#bAssumir').addEventListener('click', ()=>{
+  if(!Nuvem.logado){ toast('Entre na conta para assumir leads.'); return; }
+  const orfaos = Object.values(CRM).filter(l => !l.dono);
+  if(!orfaos.length){ toast('Todos os leads já têm dono.'); return; }
+  if(!confirm(`Assumir ${orfaos.length} lead${orfaos.length>1?'s':''} sem dono como seus?`)) return;
+  orfaos.forEach(l => l.dono = meuId());
+  Store.set('ll_crm', CRM);
+  renderKb(); renderPainel();
+  toast(`${orfaos.length} lead${orfaos.length>1?'s':''} agora ${orfaos.length>1?'são seus':'é seu'}.`);
+});
