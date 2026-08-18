@@ -1672,9 +1672,19 @@ document.addEventListener('keydown', e=>{
    ========================================================= */
 
 /* ---- porta de entrada: sem login, o app não abre ---- */
+/* Primeira parte do e-mail vira o nome padrão: alexandre@x.com -> Alexandre.
+   Serve para assinar mensagem e identificar quem é quem sem obrigar
+   ninguém a preencher nada antes de começar. */
+function nomeDoEmail(email){
+  const bruto = String(email||'').split('@')[0].replace(/[._-]+/g, ' ').trim();
+  return bruto.split(' ').filter(Boolean)
+              .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+              .join(' ');
+}
+
 function mostrarApp(usuario){
   $('#login').classList.remove('on');
-  $('#quem').textContent = (usuario.email||'').split('@')[0];
+  $('#quem').textContent = CFG.nome || nomeDoEmail(usuario.email);
   $('#quem').title = usuario.email || '';
 }
 function mostrarLogin(){
@@ -1743,8 +1753,13 @@ async function iniciarComNuvem(){
     renderRes(); renderKb(); renderPainel(); renderLandings();
 
     await Equipe.carregar();
+    if(!CFG.nome){
+      CFG.nome = nomeDoEmail(Nuvem.usuario.email);
+      Store.set('ll_cfg', CFG);
+      $('#quem').textContent = CFG.nome;
+    }
     // grava o próprio nome para o colega conseguir te identificar
-    if(CFG.nome && Equipe.nome(meuId()) !== CFG.nome){
+    if(Equipe.nome(meuId()) !== CFG.nome){
       try{ await Equipe.salvarMeuNome(CFG.nome); }catch(e){ console.warn('[perfil]', e.message); }
     }
 

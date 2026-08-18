@@ -269,7 +269,7 @@ const Equipe = (() => {
       if(!id) return '';
       if(porId[id]) return porId[id];
       const eu = Nuvem.usuario;
-      if(eu && eu.id === id) return (eu.email||'').split('@')[0];
+      if(eu && eu.id === id) return window.nomeDoEmail ? nomeDoEmail(eu.email) : (eu.email||'').split('@')[0];
       return 'outro usuário';
     },
     get todos(){ return Object.assign({}, porId); },
