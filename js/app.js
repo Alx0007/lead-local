@@ -1590,16 +1590,35 @@ $('#bMsgAuto').addEventListener('click', ()=>{
 /* Chave do Google sempre começa com "AIza" — A e I maiúsculos. O teclado
    do celular autocapitaliza e vira "Aiza", que o Google recusa com
    "API key not valid", sem dizer que o problema é uma letra. */
+/* "AIza" usa i MAIÚSCULO. Em fonte sem serifa, I maiúsculo e l minúsculo
+   são desenhados iguais, e 0 e O também se confundem. Digitar a chave
+   olhando para a tela erra sem que ninguém perceba, e o Google responde
+   só "API key not valid". Este detector aponta o caractere. */
+function prefixoTorto(k){
+  const certo = 'AIza', tem = String(k||'').slice(0,4);
+  if(tem === certo) return null;
+  const parecido = c => c.toLowerCase().replace(/l/g,'i').replace(/0/g,'o');
+  if(parecido(tem) !== parecido(certo)) return {tipo:'outra', tem};
+  for(let i = 0; i < 4; i++){
+    if(tem[i] !== certo[i]){
+      const nomes = {'I':'i maiúsculo','l':'L minúsculo','i':'i minúsculo',
+                     'O':'ó maiúsculo','0':'zero','o':'ó minúsculo'};
+      return {tipo:'caractere', pos:i+1, tem, achou:nomes[tem[i]]||tem[i], esperado:nomes[certo[i]]||certo[i]};
+    }
+  }
+  return {tipo:'outra', tem};
+}
+
 function avisarChaveTorta(){
   const k = (CFG.key||'').trim();
   if(!k) return;
-  if(k.slice(0,4) !== 'AIza'){
-    const parece = k.toLowerCase().startsWith('aiza');
-    setStatus(parece
-      ? `A chave está começando com "${esc(k.slice(0,4))}" em vez de "AIza". ` +
-        'O teclado do celular provavelmente trocou a maiúscula ao colar. ' +
-        'Cole de novo em ⚙ Config — agora o campo não deixa mais o teclado alterar.'
-      : `A chave do Google normalmente começa com "AIza", e a sua começa com "${esc(k.slice(0,4))}". Confira se copiou a chave certa.`,
+  const torto = prefixoTorto(k);
+  if(torto){
+    setStatus(torto.tipo === 'caractere'
+      ? `A chave começa com "${esc(torto.tem)}" e deveria ser "AIza": o ${torto.pos}º caractere ` +
+        `é ${torto.achou} e tem que ser ${torto.esperado}. Esses dois são desenhados iguais na tela, ` +
+        'então não dá para ver a diferença — copie a chave direto do Google Cloud, sem digitar.'
+      : `A chave do Google começa com "AIza", e a sua começa com "${esc(torto.tem)}". Confira se copiou a chave certa.`,
       'err');
   }else if(k.length < 35){
     setStatus(`A chave parece incompleta: ${k.length} caracteres, e o normal são 39. Confira se copiou inteira.`, 'err');
@@ -2024,10 +2043,17 @@ $('#bDiag').addEventListener('click', async ()=>{
   /* Impressão digital da chave: início, fim e tamanho. Chave fica no
      armazenamento de CADA aparelho, então a do desktop e a do celular
      podem ser diferentes sem ninguém perceber. Isto permite comparar. */
-  nlog(CFG.key ? 'ok' : 'er', CFG.key
+  const torto = CFG.key ? prefixoTorto(CFG.key) : null;
+  nlog(CFG.key && !torto ? 'ok' : 'er', CFG.key
     ? `chave: ${esc(CFG.key.slice(0,6))}…${esc(CFG.key.slice(-4))} · ${CFG.key.length} caracteres` +
-      (/\s/.test(CFG.key) ? ' · ATENÇÃO: tem espaço ou quebra de linha dentro' : '')
+      (/\s/.test(CFG.key) ? ' · TEM ESPAÇO OU QUEBRA DE LINHA DENTRO' : '')
     : 'SEM chave do Google neste aparelho — cole em ⚙ Config');
+  if(torto){
+    nlog('er', torto.tipo === 'caractere'
+      ? `PREFIXO ERRADO: o ${torto.pos}º caractere é ${torto.achou} e deveria ser ${torto.esperado}. ` +
+        'Na tela os dois parecem idênticos. Copie a chave direto do Google Cloud, sem digitar.'
+      : `PREFIXO ERRADO: começa com "${torto.tem}" e deveria ser "AIza".`);
+  }
   if(!CFG.key){ b.disabled = false; return; }
 
   // 1. a internet do aparelho alcança o Google?
