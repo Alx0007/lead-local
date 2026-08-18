@@ -8,7 +8,7 @@
 <!-- O ?v= no fim do CSS e do JS existe para o navegador não servir versão
      antiga do arquivo. Se você editar um dos dois e a mudança não aparecer
      na tela, aumente o número nos dois lugares. -->
-<link rel="stylesheet" href="css/style.css?v=14">
+<link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
 
@@ -188,6 +188,7 @@
         <span class="chip" data-kflt="atrasado">Contato atrasado</span>
         <span class="chip" data-kflt="comValor">Com proposta</span>
         <span class="chip" data-kflt="quente">Quentes</span>
+        <span class="chip" data-kflt="meus">Meus leads</span>
       </div>
       <div class="spacer"></div>
       <button class="btn sm ghost" id="bKbLimpa" style="display:none">Limpar</button>
@@ -246,7 +247,11 @@
     <h2>Configurações</h2>
     <p class="sub">Seus dados entram nos modelos de mensagem. A chave do Google fica só na sua máquina.</p>
     <div class="grid" style="gap:13px">
-      <div class="f"><label>Seu nome</label><input id="cNome" placeholder="ex: Miqueias"></div>
+      <div class="f">
+        <label>Seu nome</label>
+        <input id="cNome" placeholder="ex: Alexandre">
+        <div class="hint">Assina suas mensagens e identifica você para a equipe.</div>
+      </div>
       <div class="f"><label>O que você vende</label><input id="cServ" placeholder="ex: landing pages que captam clientes pelo WhatsApp"></div>
       <div class="f"><label>Seu site / portfólio (opcional)</label><input id="cSite" placeholder="ex: seusite.com.br"></div>
       <div class="f">
@@ -469,6 +474,10 @@
         <input id="lValor" type="number" min="0" step="50" placeholder="0">
       </div>
       <div class="f">
+        <label>Dono do lead</label>
+        <select id="lDono"></select>
+      </div>
+      <div class="f">
         <label>Previsão de fechamento</label>
         <input id="lDataF" type="date">
       </div>
@@ -485,6 +494,7 @@
 
     <div class="foot">
       <button class="btn ghost" onclick="closeM('mLead')">Fechar</button>
+      <span id="leadAutoria" class="autoria"></span>
       <button class="btn ghost" id="bLeadDel">Remover do funil</button>
       <button class="btn" id="bLeadSalvar">Salvar</button>
     </div>
@@ -542,7 +552,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/nuvem.js?v=3"></script>
-<script src="js/app.js?v=22"></script>
+<script src="js/nuvem.js?v=4"></script>
+<script src="js/app.js?v=23"></script>
 </body>
 </html>

@@ -99,11 +99,11 @@ O esquema do banco está em `supabase/esquema.sql`. As políticas de acesso são
 
 O app precisa estar num endereço que todos alcancem — `localhost` só existe na sua máquina e não abre no celular.
 
-A publicação é pelo **Netlify**, ligado ao repositório do GitHub: em netlify.com, "Add new site" → "Import an existing project" → escolha o repositório. Não tem build, então o comando fica vazio e a pasta publicada é a raiz (o `netlify.toml` já diz isso). A cada `git push`, o site atualiza sozinho.
+Está publicado no **Vercel**, ligado ao repositório: a cada `git push`, o site atualiza sozinho. Não há build; o `vercel.json` só cuida do cache do `index.html`, que precisa ser sempre buscado por apontar para a versão do CSS e do JS.
 
 Depois de publicar, dois ajustes:
 
-- No Google Cloud, libere o endereço novo nas restrições da chave do Places. Sem isso a busca para de funcionar fora do localhost.
+- No Google Cloud, libere o endereço publicado nas restrições da chave do Places. Sem isso a busca funciona no localhost e falha no site.
 - Os dados são protegidos pelo login do Supabase, não pelo endereço. Quem abrir a URL vê só a tela de entrada.
 
 ## Guardando versões

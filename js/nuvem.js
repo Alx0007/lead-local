@@ -114,7 +114,7 @@ const Mapa = {
       motivos:l._p?l._p.motivos:null,
       status:l.status||'novo', valor:Number(l.valor)||0,
       data_fech:l.dataFech||null, prox_contato:l.proxContato||null,
-      nota:l.nota||null
+      nota:l.nota||null, dono:l.dono||null
     };
   },
   leadDoBanco(r){
@@ -125,6 +125,7 @@ const Mapa = {
       fonte:r.fonte||'', mapa:r.mapa||'',
       status:r.status||'novo', valor:Number(r.valor)||0,
       dataFech:r.data_fech||'', proxContato:r.prox_contato||'', nota:r.nota||'',
+      dono:r.dono||'',
       _alteradoEm:r.alterado_em || '', _alteradoPor:r.alterado_por || ''
     };
     l._p = (r.score != null)
@@ -249,6 +250,38 @@ window.addEventListener('offline', ()=> Sinc.aoMudar && Sinc.esvaziar());
 /* `const` no topo de um script clássico NÃO vira propriedade de window.
    Como o app.js consulta window.Sinc antes de usar, sem estas duas linhas
    o gancho de sincronização nunca dispara — e falha calado. */
+/* Quem é quem na equipe. Sem isto a tela mostraria o identificador
+   interno do usuário no lugar do nome. */
+const Equipe = (() => {
+  let porId = {};
+  return {
+    async carregar(){
+      try{
+        const ps = await Nuvem.ler('perfis');
+        porId = {};
+        ps.forEach(p => porId[p.id] = p.nome || '');
+      }catch(e){ console.warn('[equipe]', e.message); }
+      return porId;
+    },
+    /* Cai para o começo do e-mail quando ainda não há perfil salvo, e
+       para "—" quando o identificador é desconhecido. */
+    nome(id){
+      if(!id) return '';
+      if(porId[id]) return porId[id];
+      const eu = Nuvem.usuario;
+      if(eu && eu.id === id) return (eu.email||'').split('@')[0];
+      return 'outro usuário';
+    },
+    get todos(){ return Object.assign({}, porId); },
+    async salvarMeuNome(nome){
+      const eu = Nuvem.usuario; if(!eu) return;
+      await Nuvem.gravar('perfis', {id: eu.id, nome});
+      porId[eu.id] = nome;
+    }
+  };
+})();
+
+window.Equipe = Equipe;
 window.Nuvem = Nuvem;
 window.Sinc  = Sinc;
 window.Mapa  = Mapa;

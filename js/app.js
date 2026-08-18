@@ -40,7 +40,7 @@ let CFG   = Store.get('ll_cfg', {
 let CHAMADAS = Store.get('ll_chamadas', {dia:'', n:0});   // contador de consumo da API
 let CRM   = Store.get('ll_crm', {});   // id -> lead (com .status)
 let LG    = Store.get('ll_landings', []);   // acervo de landings produzidas
-let KFLT  = {q:'', nicho:'', ordem:'score', atrasado:false, comValor:false, quente:false};
+let KFLT  = {q:'', nicho:'', ordem:'score', atrasado:false, comValor:false, quente:false, meus:false};
 let RES   = [];                        // resultados da busca atual
 let FLT   = {nosite:false, fone:false, quente:false, zap:false,
              semFunil:false, semWa:false, score:0, nota:0, aval:''};
@@ -886,6 +886,7 @@ function kbPassa(l){
   if(KFLT.q && !chave(l.nome).includes(chave(KFLT.q))) return false;
   if(KFLT.nicho && l._nicho !== KFLT.nicho) return false;
   if(KFLT.quente && l._p.faixa !== 'hot') return false;
+  if(KFLT.meus && l.dono !== meuId()) return false;
   if(KFLT.comValor && !(Number(l.valor) > 0)) return false;
   if(KFLT.atrasado){
     const d = diasAte(l.proxContato);
@@ -904,8 +905,11 @@ function kbOrdenar(a, b){
   }
 }
 
+const meuId = () => (window.Nuvem && Nuvem.usuario) ? Nuvem.usuario.id : '';
+const nomeDe = id => (window.Equipe ? Equipe.nome(id) : '');
+
 function kbFiltrosAtivos(){
-  return !!(KFLT.q || KFLT.nicho || KFLT.atrasado || KFLT.comValor || KFLT.quente);
+  return !!(KFLT.q || KFLT.nicho || KFLT.atrasado || KFLT.comValor || KFLT.quente || KFLT.meus);
 }
 
 function renderKb(){
@@ -933,6 +937,7 @@ function renderKb(){
           <div class="sm">${l._p.score} pts · ${l.phone?esc(foneBonito(l.phone)):'sem telefone'}</div>
           ${linhaValor(l)}
           ${l.nota ? `<div class="knota">${esc(l.nota.slice(0,90))}${l.nota.length>90?'…':''}</div>` : ''}
+          ${rodapeAutoria(l)}
           <div class="kacts">
             <button data-k="edit">Abrir</button>
             <button data-k="msg">Msg</button>
@@ -960,6 +965,17 @@ function linhaValor(l){
     alerta = `<span class="kprox ${classe}">${txt}</span>`;
   }
   return `<div class="kval">${partes.join(' · ')}${alerta}</div>`;
+}
+
+/* Dono é quem responde pelo lead; "mexeu" é quem alterou por último.
+   Só aparecem quando há informação — cartão de funil já é denso. */
+function rodapeAutoria(l){
+  const dono = nomeDe(l.dono);
+  const mexeu = nomeDe(l._alteradoPor);
+  const partes = [];
+  if(dono) partes.push(`<span class="kdono${l.dono===meuId()?' eu':''}">${esc(dono)}</span>`);
+  if(mexeu && l.dono !== l._alteradoPor) partes.push(`<span class="kmexeu">mexeu: ${esc(mexeu)}</span>`);
+  return partes.length ? `<div class="kautoria">${partes.join('')}</div>` : '';
 }
 
 function ligarDnD(){
@@ -1219,7 +1235,7 @@ $$('.chip[data-kflt]').forEach(c=>c.addEventListener('click', ()=>{
   renderKb();
 }));
 $('#bKbLimpa').addEventListener('click', ()=>{
-  KFLT = {q:'', nicho:'', ordem:KFLT.ordem, atrasado:false, comValor:false, quente:false};
+  KFLT = {q:'', nicho:'', ordem:KFLT.ordem, atrasado:false, comValor:false, quente:false, meus:false};
   $('#kbQ').value = ''; $('#kbNicho').value = '';
   $$('.chip[data-kflt]').forEach(c=>c.classList.remove('on'));
   renderKb();
@@ -1343,7 +1359,7 @@ $('#res').addEventListener('click', e=>{
   const a = btn.dataset.a;
   if(a === 'mapa'){ window.open(l.mapa,'_blank'); return; }
   if(a === 'crm'){
-    if(!CRM[l.id]){ CRM[l.id] = Object.assign({}, l, {status:'novo'}); Store.set('ll_crm', CRM);
+    if(!CRM[l.id]){ CRM[l.id] = Object.assign({}, l, {status:'novo', dono:meuId()}); Store.set('ll_crm', CRM);
       toast('Adicionado ao funil.'); renderRes(); }
     return;
   }
@@ -1374,7 +1390,7 @@ $('#bWa').addEventListener('click', ()=>{
 
 $('#bAddAll').addEventListener('click', ()=>{
   let n = 0;
-  visiveis().forEach(l=>{ if(!CRM[l.id]){ CRM[l.id] = Object.assign({}, l, {status:'novo'}); n++; } });
+  visiveis().forEach(l=>{ if(!CRM[l.id]){ CRM[l.id] = Object.assign({}, l, {status:'novo', dono:meuId()}); n++; } });
   Store.set('ll_crm', CRM); renderRes();
   toast(n ? n + ' leads no funil.' : 'Todos já estavam no funil.');
 });
@@ -1397,6 +1413,18 @@ function abrirLead(id){
     (l.website ? ` · <a href="${esc(l.website)}" target="_blank" rel="noopener">site</a>` : ' · sem site');
   $('#lEtapa').innerHTML = ETAPAS.map(e=>
     `<option value="${e.k}"${l.status===e.k?' selected':''}>${e.t}</option>`).join('');
+  const equipe = window.Equipe ? Equipe.todos : {};
+  const ids = Array.from(new Set([meuId(), l.dono].concat(Object.keys(equipe)).filter(Boolean)));
+  $('#lDono').innerHTML = '<option value="">sem dono definido</option>' +
+    ids.map(id=>`<option value="${esc(id)}"${l.dono===id?' selected':''}>${
+      esc(nomeDe(id))}${id===meuId()?' (você)':''}</option>`).join('');
+
+  $('#leadAutoria').textContent = l._alteradoPor
+    ? `última alteração por ${nomeDe(l._alteradoPor)}` +
+      (l._alteradoEm ? ' em ' + new Date(l._alteradoEm).toLocaleString('pt-BR',
+        {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '')
+    : '';
+
   $('#lValor').value = l.valor || '';
   $('#lDataF').value = l.dataFech || '';
   $('#lProx').value  = l.proxContato || '';
@@ -1407,6 +1435,7 @@ function abrirLead(id){
 $('#bLeadSalvar').addEventListener('click', ()=>{
   const l = CRM[leadAtual]; if(!l) return;
   l.status      = $('#lEtapa').value;
+  l.dono        = $('#lDono').value;
   l.valor       = Number($('#lValor').value) || 0;
   l.dataFech    = $('#lDataF').value;
   l.proxContato = $('#lProx').value;
@@ -1516,6 +1545,9 @@ $('#bSalvarCfg').addEventListener('click', ()=>{
          uazLim:Math.max(1,  Number($('#cUazLim').value) || 30),
          sites:lerSites()};
   Store.set('ll_cfg', CFG); closeM('mCfg'); pintarEnvio(); toast('Configurações salvas.');
+  if(CFG.nome && window.Equipe && Nuvem.logado){
+    Equipe.salvarMeuNome(CFG.nome).then(()=>{ renderKb(); }).catch(()=>{});
+  }
 });
 
 $('#bMsgPadrao').addEventListener('click', ()=>{
@@ -1709,6 +1741,12 @@ async function iniciarComNuvem(){
     Store.set('ll_landings', LG);
     Store.set('ll_semwa', Array.from(SEM_WA));
     renderRes(); renderKb(); renderPainel(); renderLandings();
+
+    await Equipe.carregar();
+    // grava o próprio nome para o colega conseguir te identificar
+    if(CFG.nome && Equipe.nome(meuId()) !== CFG.nome){
+      try{ await Equipe.salvarMeuNome(CFG.nome); }catch(e){ console.warn('[perfil]', e.message); }
+    }
 
     await atualizarEnvios();
     const aSubir = Sinc.pendentes;
