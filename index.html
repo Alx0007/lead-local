@@ -8,7 +8,7 @@
 <!-- O ?v= no fim do CSS e do JS existe para o navegador não servir versão
      antiga do arquivo. Se você editar um dos dois e a mudança não aparecer
      na tela, aumente o número nos dois lugares. -->
-<link rel="stylesheet" href="css/style.css?v=29">
+<link rel="stylesheet" href="css/style.css?v=30">
 </head>
 <body>
 
@@ -58,7 +58,7 @@
         <div class="f">
           <label>Nicho / tipo de negócio</label>
           <select id="qSel"></select>
-          <input id="q" placeholder="ex: hamburgueria artesanal" autocomplete="off" style="display:none;margin-top:8px">
+          <input id="q" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ex: hamburgueria artesanal" autocomplete="off" style="display:none;margin-top:8px">
           <div class="hint">Escolha na lista, ou use <b>“outro termo”</b> no fim dela para digitar o que quiser.</div>
         </div>
       </div>
@@ -84,7 +84,7 @@
 
       <div style="margin-top:14px" class="f" id="fBairros">
         <label>Bairros ou regiões <span style="text-transform:none;color:var(--dim2);font-weight:400">— opcional, separados por vírgula</span></label>
-        <input id="bairros" placeholder="ex: Centro, Batel, Água Verde, Portão" autocomplete="off">
+        <input id="bairros" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ex: Centro, Batel, Água Verde, Portão" autocomplete="off">
         <div class="hint">O Google devolve no máximo 20 empresas por busca. Cada bairro aqui vira uma busca separada — 5 bairros ≈ 100 leads. É assim que você faz volume.</div>
       </div>
 
@@ -252,10 +252,10 @@
         <div class="hint">Assina suas mensagens e identifica você para a equipe.</div>
       </div>
       <div class="f"><label>O que você vende</label><input id="cServ" placeholder="ex: landing pages que captam clientes pelo WhatsApp"></div>
-      <div class="f"><label>Seu site / portfólio (opcional)</label><input id="cSite" placeholder="ex: seusite.com.br"></div>
+      <div class="f"><label>Seu site / portfólio (opcional)</label><input id="cSite" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ex: seusite.com.br"></div>
       <div class="f">
         <label>Chave da Google Places API</label>
-        <input id="cKey" placeholder="AIza..." autocomplete="off">
+        <input id="cKey" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AIza..." autocomplete="off">
         <div class="hint">Sem ela o app não busca. Fica guardada só no seu navegador.</div>
       </div>
     </div>
@@ -303,11 +303,11 @@
       </div>
       <div class="f">
         <label>Chave da IA</label>
-        <input id="cIaKey" placeholder="cole a chave aqui" autocomplete="off">
+        <input id="cIaKey" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="cole a chave aqui" autocomplete="off">
       </div>
       <div class="f">
         <label>Modelo</label>
-        <input id="cIaMod" list="modelos" placeholder="gemini-2.0-flash">
+        <input id="cIaMod" autocapitalize="off" autocorrect="off" spellcheck="false" list="modelos" placeholder="gemini-2.0-flash">
         <datalist id="modelos">
           <option value="gemini-2.0-flash"></option>
           <option value="gemini-2.5-flash"></option>
@@ -337,11 +337,11 @@
     <div class="grid" style="gap:13px">
       <div class="f">
         <label>Servidor</label>
-        <input id="cUazUrl" placeholder="https://free.uazapi.com" autocomplete="off">
+        <input id="cUazUrl" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://free.uazapi.com" autocomplete="off">
       </div>
       <div class="f">
         <label>Token da instância</label>
-        <input id="cUazToken" placeholder="cole o token da instância" autocomplete="off">
+        <input id="cUazToken" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="cole o token da instância" autocomplete="off">
         <div class="hint">Fica só no seu navegador, como as outras chaves. Não vai para dentro do código.</div>
       </div>
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:13px">
@@ -404,7 +404,7 @@
       </div>
     </div>
 
-    <div class="f" style="margin-top:13px"><label>Endereço</label><input id="lgUrl" placeholder="https://..."></div>
+    <div class="f" style="margin-top:13px"><label>Endereço</label><input id="lgUrl" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://..."></div>
 
     <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:13px;margin-top:13px">
       <div class="f">
@@ -554,6 +554,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="js/nuvem.js?v=5"></script>
-<script src="js/app.js?v=29"></script>
+<script src="js/app.js?v=30"></script>
 </body>
 </html>

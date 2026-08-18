@@ -698,8 +698,13 @@ function carregarGoogle(key){
    de verdade enquanto você arruma a chave — o resto passa direto. */
 function traduzirErroGoogle(msg){
   const m = String(msg || 'falhou');
-  if(/API key not valid|INVALID_ARGUMENT.*key/i.test(m))
+  if(/API key not valid|INVALID_ARGUMENT.*key/i.test(m)){
+    const k = (CFG.key||'').trim();
+    if(k && k.slice(0,4) !== 'AIza' && k.toLowerCase().startsWith('aiza'))
+      return `a chave está com "${k.slice(0,4)}" no lugar de "AIza" — o teclado do celular ` +
+             'trocou a maiúscula ao colar. Cole de novo em ⚙ Config.';
     return 'a chave não é válida. Confira se copiou inteira, sem espaços.';
+  }
   if(/API_KEY_HTTP_REFERRER_BLOCKED|referer/i.test(m))
     return 'a chave existe, mas as restrições dela bloqueiam este endereço. ' +
            'No Google Cloud, libere ' + location.origin + ' nas restrições da chave.';
@@ -1560,6 +1565,7 @@ $('#bSalvarCfg').addEventListener('click', ()=>{
          uazLim:Math.max(1,  Number($('#cUazLim').value) || 30),
          sites:lerSites()};
   Store.set('ll_cfg', CFG); closeM('mCfg'); pintarEnvio(); toast('Configurações salvas.');
+  avisarChaveTorta();
   if(CFG.nome && window.Equipe && Nuvem.logado){
     Equipe.salvarMeuNome(CFG.nome).then(()=>{ renderKb(); }).catch(()=>{});
   }
@@ -1573,6 +1579,25 @@ $('#bMsgAuto').addEventListener('click', ()=>{
   $('#cMsg').value = '';
   toast('Campo vazio = voltam os três modelos automáticos por tipo de lead.');
 });
+
+/* Chave do Google sempre começa com "AIza" — A e I maiúsculos. O teclado
+   do celular autocapitaliza e vira "Aiza", que o Google recusa com
+   "API key not valid", sem dizer que o problema é uma letra. */
+function avisarChaveTorta(){
+  const k = (CFG.key||'').trim();
+  if(!k) return;
+  if(k.slice(0,4) !== 'AIza'){
+    const parece = k.toLowerCase().startsWith('aiza');
+    setStatus(parece
+      ? `A chave está começando com "${esc(k.slice(0,4))}" em vez de "AIza". ` +
+        'O teclado do celular provavelmente trocou a maiúscula ao colar. ' +
+        'Cole de novo em ⚙ Config — agora o campo não deixa mais o teclado alterar.'
+      : `A chave do Google normalmente começa com "AIza", e a sua começa com "${esc(k.slice(0,4))}". Confira se copiou a chave certa.`,
+      'err');
+  }else if(k.length < 35){
+    setStatus(`A chave parece incompleta: ${k.length} caracteres, e o normal são 39. Confira se copiou inteira.`, 'err');
+  }
+}
 
 $('#bUazTeste').addEventListener('click', async ()=>{
   const el = $('#uazStatus'), b = $('#bUazTeste');
@@ -1856,6 +1881,8 @@ if(location.protocol === 'file:'){
 if(CHAMADAS.dia !== new Date().toISOString().slice(0,10)){ CHAMADAS = {dia:'', n:0}; }
 if(!CFG.key){
   setStatus('Cole sua chave do Google Places em ⚙ Config para começar a buscar.');
+}else{
+  avisarChaveTorta();
 }
 if(!Store.ok){
   $('#noStore').innerHTML = '<div class="warn"><b>Aviso:</b> este navegador está bloqueando o armazenamento local, ' +
