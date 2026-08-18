@@ -1862,3 +1862,39 @@ $('#bAutoteste').addEventListener('click', async ()=>{
     try{ await Nuvem.apagar('leads','id',id); }catch(x){}
   }finally{ b.disabled = false; }
 });
+
+$('#bVerBanco').addEventListener('click', async ()=>{
+  if(!Nuvem.logado){ toast('Entre na conta primeiro.'); return; }
+  const b = $('#bVerBanco'); b.disabled = true;
+  $('#nuvemLog').innerHTML = '';
+  try{
+    const [ls, gs, ws] = await Promise.all([
+      Nuvem.ler('leads'), Nuvem.ler('landings'), Nuvem.ler('sem_whatsapp')]);
+    const envios = await Nuvem.enviosHoje();
+
+    nlog('ok', `${ls.length} leads no banco · ${Object.keys(CRM).length} neste aparelho`);
+    nlog('ok', `${gs.length} landings no banco · ${LG.length} neste aparelho`);
+    nlog('ok', `${ws.length} números sem WhatsApp`);
+    nlog('ok', `${envios} de ${uazLim()} envios usados hoje pela equipe`);
+
+    // o que existe aqui e não chegou lá
+    const idsLa = new Set(ls.map(r=>r.id));
+    const faltando = Object.values(CRM).filter(l=>!idsLa.has(l.id));
+    if(faltando.length){
+      nlog('er', `${faltando.length} lead(s) daqui ainda não estão no banco:`);
+      faltando.slice(0,8).forEach(l=> nlog('sk', l.nome));
+      if(faltando.length>8) nlog('sk', `…e mais ${faltando.length-8}`);
+      nlog('sk', `${Sinc.pendentes} na fila de subida`);
+    }else{
+      nlog('ok', 'nenhum lead deste aparelho ficou para trás');
+    }
+
+    // por etapa, que é como você enxerga o funil
+    const porEtapa = ETAPAS.map(e=>{
+      const n = ls.filter(r=>r.status===e.k).length;
+      return n ? `${e.t}: ${n}` : null;
+    }).filter(Boolean).join(' · ');
+    if(porEtapa) nlog('ok', porEtapa);
+  }catch(e){ nlog('er', e.message); }
+  finally{ b.disabled = false; }
+});
