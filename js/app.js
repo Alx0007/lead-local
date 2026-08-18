@@ -2021,8 +2021,12 @@ $('#bDiag').addEventListener('click', async ()=>{
 
   nlog('sk', navigator.onLine ? 'aparelho online' : 'APARELHO OFFLINE');
   nlog('sk', 'origem enviada ao Google: ' + location.origin);
+  /* Impressão digital da chave: início, fim e tamanho. Chave fica no
+     armazenamento de CADA aparelho, então a do desktop e a do celular
+     podem ser diferentes sem ninguém perceber. Isto permite comparar. */
   nlog(CFG.key ? 'ok' : 'er', CFG.key
-    ? `chave do Google presente (${CFG.key.length} caracteres, começa com ${esc(CFG.key.slice(0,6))})`
+    ? `chave: ${esc(CFG.key.slice(0,6))}…${esc(CFG.key.slice(-4))} · ${CFG.key.length} caracteres` +
+      (/\s/.test(CFG.key) ? ' · ATENÇÃO: tem espaço ou quebra de linha dentro' : '')
     : 'SEM chave do Google neste aparelho — cole em ⚙ Config');
   if(!CFG.key){ b.disabled = false; return; }
 
