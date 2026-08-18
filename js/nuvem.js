@@ -173,14 +173,21 @@ const Sinc = (() => {
 
   const guardarFila = () => { try{ localStorage.setItem('ll_fila', JSON.stringify(fila)); }catch(e){} };
 
-  function enfileirar(tabela, linha){
-    // uma linha só entra uma vez na fila: a versão nova substitui a antiga
-    const i = fila.findIndex(f => f.tabela === tabela && f.linha.id === linha.id);
-    if(i >= 0) fila[i] = {tabela, linha}; else fila.push({tabela, linha});
+  const chaveDe = item => item.tabela + ':' + (item.linha ? (item.linha.id || item.linha.fone) : item.valor);
+
+  function enfileirar(item){
+    // cada registro entra uma vez só: a operação nova substitui a anterior.
+    // Se algo foi editado e depois apagado, o que vale é o apagar.
+    const k = chaveDe(item);
+    const i = fila.findIndex(f => chaveDe(f) === k);
+    if(i >= 0) fila[i] = item; else fila.push(item);
     guardarFila();
     aoMudarStatus();
     subir();
   }
+
+  const enfileirarGravacao = (tabela, linha) => enfileirar({tabela, linha});
+  const enfileirarRemocao  = (tabela, coluna, valor) => enfileirar({tabela, coluna, valor});
 
   async function subir(){
     if(subindo || !fila.length || !Nuvem.logado || !navigator.onLine) return;
@@ -188,7 +195,8 @@ const Sinc = (() => {
     try{
       while(fila.length){
         const item = fila[0];
-        await Nuvem.gravar(item.tabela, item.linha);
+        if(item.linha) await Nuvem.gravar(item.tabela, item.linha);
+        else           await Nuvem.apagar(item.tabela, item.coluna, item.valor);
         fila.shift(); guardarFila(); aoMudarStatus();
       }
     }catch(e){
@@ -208,16 +216,16 @@ const Sinc = (() => {
       if(chave === 'll_crm'){
         Object.values(valor||{}).forEach(l=>{
           const linha = Mapa.leadParaBanco(l), txt = JSON.stringify(linha);
-          if(sombra['l:'+l.id] !== txt){ sombra['l:'+l.id] = txt; enfileirar('leads', linha); }
+          if(sombra['l:'+l.id] !== txt){ sombra['l:'+l.id] = txt; enfileirarGravacao('leads', linha); }
         });
       }else if(chave === 'll_landings'){
         (valor||[]).forEach(x=>{
           const linha = Mapa.landingParaBanco(x), txt = JSON.stringify(linha);
-          if(sombra['g:'+x.id] !== txt){ sombra['g:'+x.id] = txt; enfileirar('landings', linha); }
+          if(sombra['g:'+x.id] !== txt){ sombra['g:'+x.id] = txt; enfileirarGravacao('landings', linha); }
         });
       }else if(chave === 'll_semwa'){
         (valor||[]).forEach(f=>{
-          if(!sombra['w:'+f]){ sombra['w:'+f] = 1; enfileirar('sem_whatsapp', {fone:f}); }
+          if(!sombra['w:'+f]){ sombra['w:'+f] = 1; enfileirarGravacao('sem_whatsapp', {fone:f}); }
         });
       }
     },
@@ -230,14 +238,21 @@ const Sinc = (() => {
       (semwa||[]).forEach(f=> sombra['w:'+f] = 1);
     },
 
+    /* Remoção precisa ser explícita: o registrar() só enxerga o que
+       existe, então apagar algo localmente jamais chegaria ao banco. */
+    remover(tabela, coluna, valor){
+      delete sombra[(tabela === 'leads' ? 'l:' : tabela === 'landings' ? 'g:' : 'w:') + valor];
+      enfileirarRemocao(tabela, coluna, valor);
+    },
+
     /* força o envio do que estiver parado (usado na migração e ao reconectar) */
     async esvaziar(){ await subir(); return fila.length; },
 
     /* manda TUDO, ignorando a sombra — é a migração inicial */
     async migrar(crm, landings, semwa){
-      Object.values(crm||{}).forEach(l=> enfileirar('leads', Mapa.leadParaBanco(l)));
-      (landings||[]).forEach(x=> enfileirar('landings', Mapa.landingParaBanco(x)));
-      (semwa||[]).forEach(f=> enfileirar('sem_whatsapp', {fone:f}));
+      Object.values(crm||{}).forEach(l=> enfileirarGravacao('leads', Mapa.leadParaBanco(l)));
+      (landings||[]).forEach(x=> enfileirarGravacao('landings', Mapa.landingParaBanco(x)));
+      (semwa||[]).forEach(f=> enfileirarGravacao('sem_whatsapp', {fone:f}));
       await subir();
       return fila.length;
     }

@@ -1294,7 +1294,8 @@ $('#bLgSalvar').addEventListener('click', ()=>{
 
 $('#bLgDel').addEventListener('click', ()=>{
   if(!lgAtual) return;
-  if(!confirm('Excluir esta landing do acervo?')) return;
+  if(!confirm('Excluir esta landing do acervo? Ela some para toda a equipe.')) return;
+  if(window.Sinc) Sinc.remover('landings', 'id', lgAtual);
   LG = LG.filter(x=>x.id !== lgAtual);
   lgSalvarTudo(); closeM('mLg'); renderLandings();
   toast('Excluída do acervo.');
@@ -1447,17 +1448,12 @@ $('#bLeadSalvar').addEventListener('click', ()=>{
 
 $('#bLeadDel').addEventListener('click', ()=>{
   if(!CRM[leadAtual]) return;
-  if(!confirm('Remover este lead do funil? As observações e valores vão junto.')) return;
-  delete CRM[leadAtual]; Store.set('ll_crm', CRM);
+  if(!confirm('Remover este lead do funil? As observações e valores vão junto, e ele some para toda a equipe.')) return;
+  const id = leadAtual;
+  delete CRM[id]; Store.set('ll_crm', CRM);
+  if(window.Sinc) Sinc.remover('leads', 'id', id);
   closeM('mLead'); renderKb(); renderPainel(); renderRes();
   toast('Removido do funil.');
-});
-
-$('#bLimpar').addEventListener('click', ()=>{
-  if(!Object.keys(CRM).length){ toast('O funil já está vazio.'); return; }
-  if(confirm('Isso apaga todos os leads do funil. Baixe um backup antes se quiser guardar. Continuar?')){
-    CRM = {}; Store.set('ll_crm', CRM); renderKb(); renderPainel(); toast('Funil limpo.');
-  }
 });
 
 $('#bExp').addEventListener('click', exportarCSV);
@@ -1785,7 +1781,7 @@ function ligarTempoReal(){
   Nuvem.escutar('leads', carga=>{
     const r = carga.new;
     if(!r || !r.id) return;
-    if(carga.eventType === 'DELETE'){ delete CRM[carga.old.id]; }
+    if(carga.eventType === 'DELETE'){ delete CRM[(carga.old||{}).id]; }
     else{
       const vindo = Mapa.leadDoBanco(r), atual = CRM[vindo.id];
       if(atual && atual._alteradoEm && vindo._alteradoEm <= atual._alteradoEm) return;
