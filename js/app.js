@@ -657,6 +657,12 @@ window.gm_authFailure = () => {
 
 function carregarGoogle(key){
   if(gPronto) return gPronto;
+  // API já de pé de uma tentativa anterior: carregar de novo faz o Google
+  // reclamar e pode deixar o callback sem disparar, travando para sempre
+  if(typeof google !== 'undefined' && google.maps && google.maps.importLibrary){
+    gPronto = Promise.resolve(true);
+    return gPronto;
+  }
   gPronto = new Promise((ok, err)=>{
     // Com loading=async, o onload do script dispara ANTES de
     // google.maps.importLibrary existir — dá uns 150ms de diferença, e é
@@ -706,6 +712,18 @@ function traduzirErroGoogle(msg){
   return m;
 }
 
+/* Promessa com prazo. Sem isto, um bloqueador de conteúdo ou uma rede que
+   engole a requisição deixa a busca girando para sempre: o navegador não
+   dispara erro nem sucesso, e o app fica esperando um retorno que não vem. */
+function comPrazo(promessa, ms, oQue){
+  return Promise.race([
+    promessa,
+    new Promise((_, err)=> setTimeout(()=> err(new Error(
+      `${oQue} não respondeu em ${Math.round(ms/1000)}s. ` +
+      'Pode ser a rede do celular, ou uma extensão/bloqueador barrando o Google.')), ms))
+  ]);
+}
+
 function contar(n){
   const hoje = new Date().toISOString().slice(0,10);
   if(CHAMADAS.dia !== hoje) CHAMADAS = {dia:hoje, n:0};
@@ -717,7 +735,8 @@ async function buscarGoogle(nicho, cidade, limite, bairros){
   if(!CFG.key) throw new Error('Cole sua chave do Places em ⚙ Config, ou troque a fonte para OpenStreetMap.');
   setStatus('Conectando na API do Google…', 'load');
   await carregarGoogle(CFG.key);
-  const { Place } = await google.maps.importLibrary('places');
+  const { Place } = await comPrazo(google.maps.importLibrary('places'), 20000,
+                                   'A biblioteca de lugares do Google');
 
   // O Places devolve no máximo 20 por consulta. Uma consulta por bairro = volume de verdade.
   const areas = (bairros && bairros.length) ? bairros : [''];
@@ -731,10 +750,10 @@ async function buscarGoogle(nicho, cidade, limite, bairros){
     const alvo = areas[i] ? `${nicho} em ${areas[i]}, ${cidade}` : `${nicho} em ${cidade}`;
     setStatus(`Buscando ${i+1} de ${areas.length}: "${alvo}"…`, 'load');
     try{
-      const { places } = await Place.searchByText({
+      const { places } = await comPrazo(Place.searchByText({
         textQuery: alvo, fields: campos,
         language:'pt-BR', region:'br', maxResultCount: 20
-      });
+      }), 30000, 'A busca no Google');
       contar(1);
       (places||[]).forEach(p => todos.push({
         id: 'goo-' + (p.id || Math.random().toString(36).slice(2)),
@@ -1946,4 +1965,61 @@ $('#bVerBanco').addEventListener('click', async ()=>{
     if(porEtapa) nlog('ok', porEtapa);
   }catch(e){ nlog('er', e.message); }
   finally{ b.disabled = false; }
+});
+
+/* Diagnóstico da busca: roda cada etapa isolada, com prazo, e diz em qual
+   delas o aparelho trava. Serve para o celular, onde não dá para abrir o
+   console com conforto. */
+$('#bDiag').addEventListener('click', async ()=>{
+  const b = $('#bDiag'); b.disabled = true;
+  $('#nuvemLog').innerHTML = '';
+  const etapa = async (nome, fn, ms) => {
+    const t0 = Date.now();
+    try{
+      const r = await comPrazo(Promise.resolve().then(fn), ms, nome);
+      nlog('ok', `${nome} — ${Date.now()-t0}ms${r ? ' · ' + r : ''}`);
+      return true;
+    }catch(e){
+      nlog('er', `${nome} — ${Date.now()-t0}ms · ${e.message}`);
+      return false;
+    }
+  };
+
+  nlog('sk', navigator.onLine ? 'aparelho online' : 'APARELHO OFFLINE');
+  nlog(CFG.key ? 'ok' : 'er', CFG.key
+    ? `chave do Google presente (${CFG.key.length} caracteres, começa com ${esc(CFG.key.slice(0,6))})`
+    : 'SEM chave do Google neste aparelho — cole em ⚙ Config');
+  if(!CFG.key){ b.disabled = false; return; }
+
+  // 1. a internet do aparelho alcança o Google?
+  await etapa('Alcançar o servidor do Google', async ()=>{
+    await fetch('https://maps.googleapis.com/maps/api/js?key=teste', {mode:'no-cors'});
+    return 'rede liberada';
+  }, 15000);
+
+  // 2. o script da API carrega e avisa que está pronto?
+  const carregou = await etapa('Carregar a API do Google', async ()=>{
+    await carregarGoogle(CFG.key);
+    return 'API de pé';
+  }, 25000);
+  if(!carregou){ b.disabled = false; return; }
+
+  // 3. a biblioteca de lugares responde?
+  let Place = null;
+  const temLib = await etapa('Abrir a biblioteca de lugares', async ()=>{
+    Place = (await google.maps.importLibrary('places')).Place;
+    return 'biblioteca aberta';
+  }, 20000);
+  if(!temLib){ b.disabled = false; return; }
+
+  // 4. a busca de verdade, com a sua chave
+  await etapa('Buscar "pizzaria em Guarulhos"', async ()=>{
+    const { places } = await Place.searchByText({
+      textQuery:'pizzaria em Guarulhos', fields:['id','displayName'],
+      language:'pt-BR', region:'br', maxResultCount:5});
+    return (places||[]).length + ' resultados';
+  }, 30000);
+
+  nlog('sk', 'fim do diagnóstico');
+  b.disabled = false;
 });
