@@ -330,7 +330,7 @@ Alexandre Lacerda
 
 [saudacao]! Tudo certo?
 
-Sou o Alexandre, faço sites para negócios daqui de Guarulhos. Vi o [nome do restaurante] no Google Maps e notei que vocês ainda não têm site — quem procura acaba achando só o perfil do Maps.
+Sou o Alexandre, faço sites para negócios daqui de [cidade]. Vi o [nome do restaurante] no Google Maps e notei que vocês ainda não têm site — quem procura acaba achando só o perfil do Maps.
 
 Montei uma página de exemplo para vocês olharem, sem compromisso:
 
@@ -351,6 +351,104 @@ Fiz esta página para mostrar como ficaria a de vocês:
 [link]
 
 Funciona no celular e tem botão direto para o WhatsApp. É só olhar e me dizer o que achou. Se não interessar, sem problema nenhum.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]! Posso fazer uma pergunta rápida?
+
+Quando alguém procura o [nome do restaurante] no Google, vocês sabem o que aparece? Hoje é só o perfil do Maps — sem site, sem cardápio, sem um lugar de vocês.
+
+Sou o Alexandre e montei uma página mostrando como poderia ser:
+
+[link]
+
+Dá uma olhada quando puder. Se achar que não é para agora, é só me dizer.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Alexandre falando. Reparei que o [nome do restaurante] não tem site — e isso significa que quem ouve falar de vocês e vai procurar no Google não encontra cardápio nem horário, só o mapa.
+
+Montei uma página resolvendo isso, para vocês verem:
+
+[link]
+
+Sem compromisso, é mesmo só para olhar. Me diz depois se faz sentido para vocês.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Sou o Alexandre, faço sites aqui em [cidade]. Achei o [nome do restaurante] no Maps e vi que vocês não têm um.
+
+Montei este para vocês verem como ficaria:
+
+[link]
+
+O que achou? Se não for o momento, tudo bem, é só falar.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Aqui é o Alexandre, sou de [cidade] e trabalho fazendo site para comércio da região. Passei pelo [nome do restaurante] no Google Maps e vi que vocês ainda não têm um endereço próprio na internet.
+
+Fiz uma página de exemplo, já no ar:
+
+[link]
+
+Abra do celular, que é onde a maioria vai ver. Se gostar, a gente conversa. Se não, sem problema.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Alexandre Lacerda aqui. Vou direto ao ponto: montei uma página para o [nome do restaurante] e ela já está no ar.
+
+[link]
+
+Fiz porque vi no Google Maps que vocês não tinham site, e achei mais fácil mostrar do que explicar. Tem cardápio, endereço, horário e botão de WhatsApp.
+
+Se gostarem, a gente ajusta com as fotos de vocês e coloca no domínio próprio. Se não, é só ignorar esta mensagem.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Sou o Alexandre. Quase todo mundo que procura restaurante hoje faz isso pelo celular — e quando procuram o [nome do restaurante], não tem um site de vocês para abrir.
+
+Montei um para mostrar como ficaria:
+
+[link]
+
+Abre rápido no telefone e leva direto para o WhatsApp de vocês. Dá uma olhada e me fala o que achou.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Alexandre aqui, e já aviso que não é para vender nada agora.
+
+Vi o [nome do restaurante] no Google Maps, reparei que não tem site, e montei uma página de exemplo por conta própria:
+
+[link]
+
+É só para vocês verem como ficaria. Se um dia fizer sentido, me chamem. Se não, podem ignorar tranquilamente.
 
 Alexandre Lacerda`;
 
