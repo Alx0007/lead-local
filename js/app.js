@@ -497,19 +497,33 @@ function siteDoNicho(l){
   return (CFG.sites || {})[l._nicho] || '';
 }
 
+/* A variação gira a cada envio, para duas mensagens seguidas saindo do
+   mesmo número nunca serem iguais.
+
+   O giro usa o contador de envios do dia, que já é compartilhado entre a
+   equipe: os dois avançam na mesma roda sem precisar combinar nada, e sem
+   chamada extra ao servidor.
+
+   O deslocamento pelo dia evita que todo dia comece pela variação 1, que
+   seria um padrão semanal fácil de notar. */
+function indiceVariacao(total){
+  if(total <= 1) return 0;
+  return (enviosHoje() + digitoDoId(hojeISO(), total)) % total;
+}
+
 function montarMsg(l){
   // '' = você esvaziou o campo de propósito, então voltam os modelos automáticos.
   // null/ausente = nunca mexeu, vale a mensagem padrão de fábrica.
   if(CFG.msgPadrao === '') return montarMsgAuto(l);
   const vs = variacoes(CFG.msgPadrao || MSG_PADRAO);
   if(!vs.length) return montarMsgAuto(l);
-  return aplicarEtiquetas(vs[digitoDoId(l.id, vs.length)], l);
+  return aplicarEtiquetas(vs[indiceVariacao(vs.length)], l);
 }
 
-/* Qual variação este lead recebe — para mostrar na fila. */
-function qualVariacao(l){
+/* Qual variação está saindo agora — para mostrar na fila. */
+function qualVariacao(){
   const vs = variacoes(CFG.msgPadrao || MSG_PADRAO);
-  return vs.length > 1 ? {n: digitoDoId(l.id, vs.length) + 1, de: vs.length} : null;
+  return vs.length > 1 ? {n: indiceVariacao(vs.length) + 1, de: vs.length} : null;
 }
 
 function montarMsgAuto(l){
@@ -708,7 +722,7 @@ function filaMostrar(){
     return;
   }
 
-  const v = qualVariacao(l);
+  const v = qualVariacao();
   $('#loteQuem').textContent = `${FILA.i + 1} de ${FILA.leads.length} · ${l.nome} · ${foneBonito(l.phone)}` +
     (v ? ` · variação ${v.n} de ${v.de}` : '');
   $('#loteTxt').value = montarMsg(l);
