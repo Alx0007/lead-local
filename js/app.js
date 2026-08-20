@@ -313,7 +313,7 @@ const nomeFaixa = f => f==='hot' ? 'Quente' : f==='warm' ? 'Morno' : 'Frio';
    [link] é de propósito deixado como está: a página de demonstração é
    diferente para cada lead, então quem cola é você, na hora do envio. */
 const MSG_PADRAO =
-`Olá, tudo bem?
+`[saudacao]!
 
 Me chamo Alexandre Lacerda. Encontrei o [nome do restaurante] no Google Maps e reparei que vocês não têm um site próprio — hoje quem procura por vocês no Google encontra só o perfil do Maps.
 
@@ -324,7 +324,58 @@ Montei uma página de demonstração para vocês verem como ficaria, com cardáp
 Já está no ar e funciona bem no celular. Fiz sem compromisso nenhum: se gostarem, a gente conversa sobre colocar no domínio de vocês. Se não for o momento, é só me responder que não incomodo mais.
 
 Um abraço,
+Alexandre Lacerda
+
+---
+
+[saudacao]! Tudo certo?
+
+Sou o Alexandre, faço sites para negócios daqui de Guarulhos. Vi o [nome do restaurante] no Google Maps e notei que vocês ainda não têm site — quem procura acaba achando só o perfil do Maps.
+
+Montei uma página de exemplo para vocês olharem, sem compromisso:
+
+[link]
+
+Se fizer sentido, a gente ajusta com as fotos e o cardápio de vocês. Se não for a hora, é só falar que eu não insisto.
+
+Alexandre Lacerda
+
+---
+
+[saudacao]!
+
+Alexandre aqui. Procurando [categoria] em [cidade] no Google, dei de cara com o [nome do restaurante] — e vi que vocês não têm um site próprio ainda.
+
+Fiz esta página para mostrar como ficaria a de vocês:
+
+[link]
+
+Funciona no celular e tem botão direto para o WhatsApp. É só olhar e me dizer o que achou. Se não interessar, sem problema nenhum.
+
 Alexandre Lacerda`;
+
+/* Saudação pelo horário: varia sozinha ao longo do dia e soa natural,
+   diferente de trocar sinônimo, que soa a texto girado. */
+function saudacao(){
+  const h = new Date().getHours();
+  return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+}
+
+/* Número estável a partir do id: o mesmo lead recebe sempre a mesma
+   variação. Sorteio puro faria a mensagem mudar toda vez que você abre a
+   ficha, e você acabaria mandando algo diferente do que revisou. */
+function digitoDoId(id, quantos){
+  let n = 0;
+  const t = String(id||'');
+  for(let i = 0; i < t.length; i++) n = (n * 31 + t.charCodeAt(i)) >>> 0;
+  return quantos ? n % quantos : n;
+}
+
+/* As variações ficam no mesmo campo, separadas por uma linha com ---.
+   Um campo só é mais fácil de editar que uma lista de campos. */
+function variacoes(texto){
+  return String(texto||'').split(/^\s*---+\s*$/m).map(t=>t.trim()).filter(Boolean);
+}
 
 function aplicarEtiquetas(texto, l){
   return String(texto)
@@ -332,6 +383,8 @@ function aplicarEtiquetas(texto, l){
     .replace(/\[nome\]/gi,                l.nome || '')
     .replace(/\[categoria\]/gi,           (l.categoria || 'negócios como o de vocês').toLowerCase())
     .replace(/\[cidade\]/gi,              l.cidade || '')
+    .replace(/\[saudacao\]/gi,            saudacao())
+    .replace(/\[sauda\u00e7\u00e3o\]/gi,            saudacao())
     // [link] só é trocado se houver site cadastrado para o nicho buscado;
     // sem cadastro ele fica visível de propósito, para você não esquecer
     .replace(/\[link\]/gi,                siteDoNicho(l) || '[link]');
@@ -350,7 +403,15 @@ function montarMsg(l){
   // '' = você esvaziou o campo de propósito, então voltam os modelos automáticos.
   // null/ausente = nunca mexeu, vale a mensagem padrão de fábrica.
   if(CFG.msgPadrao === '') return montarMsgAuto(l);
-  return aplicarEtiquetas(CFG.msgPadrao || MSG_PADRAO, l);
+  const vs = variacoes(CFG.msgPadrao || MSG_PADRAO);
+  if(!vs.length) return montarMsgAuto(l);
+  return aplicarEtiquetas(vs[digitoDoId(l.id, vs.length)], l);
+}
+
+/* Qual variação este lead recebe — para mostrar na fila. */
+function qualVariacao(l){
+  const vs = variacoes(CFG.msgPadrao || MSG_PADRAO);
+  return vs.length > 1 ? {n: digitoDoId(l.id, vs.length) + 1, de: vs.length} : null;
 }
 
 function montarMsgAuto(l){
@@ -549,7 +610,9 @@ function filaMostrar(){
     return;
   }
 
-  $('#loteQuem').textContent = `${FILA.i + 1} de ${FILA.leads.length} · ${l.nome} · ${foneBonito(l.phone)}`;
+  const v = qualVariacao(l);
+  $('#loteQuem').textContent = `${FILA.i + 1} de ${FILA.leads.length} · ${l.nome} · ${foneBonito(l.phone)}` +
+    (v ? ` · variação ${v.n} de ${v.de}` : '');
   $('#loteTxt').value = montarMsg(l);
   $('#loteFl').style.width = FILA.i / FILA.leads.length * 100 + '%';
   $('#loteResumo').innerHTML =
@@ -1733,6 +1796,21 @@ $('#bLote').addEventListener('click', ()=>{
   filaAbrir(leads);
 });
 $('#bLoteEnviar').addEventListener('click', filaEnviar);
+
+/* Reescrever com IA é a variação mais forte que existe aqui: em vez de
+   alternar entre textos prontos, escreve um específico para aquele
+   negócio. Custa alguns segundos e vale nos leads que importam. */
+$('#bLoteIA').addEventListener('click', async ()=>{
+  const l = FILA.leads[FILA.i]; if(!l) return;
+  const b = $('#bLoteIA'), antes = b.textContent;
+  b.disabled = true; b.textContent = 'Escrevendo…';
+  try{
+    $('#loteTxt').value = await escreverComIA(l, $('#loteTxt').value);
+    toast('Reescrita pela IA — revise antes de mandar.');
+  }catch(e){
+    toast(e.message || 'A IA não respondeu.');
+  }finally{ b.disabled = false; b.textContent = antes; }
+});
 $('#bLotePular').addEventListener('click', ()=>{
   loteLog('sk', (FILA.leads[FILA.i] || {}).nome || '', 'pulado');
   filaAvancar();

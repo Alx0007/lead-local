@@ -12,7 +12,7 @@
 <!-- O ?v= no fim do CSS e do JS existe para o navegador não servir versão
      antiga do arquivo. Se você editar um dos dois e a mudança não aparecer
      na tela, aumente o número nos dois lugares. -->
-<link rel="stylesheet" href="css/style.css?v=34">
+<link rel="stylesheet" href="css/style.css?v=36">
 </head>
 <body>
 
@@ -265,17 +265,24 @@
     </div>
 
     <h2 style="margin-top:22px">Mensagem padrão</h2>
-    <p class="sub">É o texto que aparece já preenchido em toda mensagem. Você sempre revisa antes de enviar.</p>
+    <p class="sub">O texto que aparece preenchido em toda mensagem. Você sempre revisa antes de enviar.</p>
+    <div class="warn" style="margin:0 0 12px">
+      <b>Escreva variações.</b> Separe cada uma por uma linha com <code>---</code>.
+      Cada lead recebe sempre a mesma variação, escolhida pelo identificador dele —
+      então o texto que você revisa é o que sai. Mensagem idêntica repetida é um dos
+      padrões que o WhatsApp usa para identificar disparo em massa.
+    </div>
     <div class="f">
       <textarea id="cMsg" style="min-height:230px"></textarea>
       <div class="hint">
         Etiquetas trocadas automaticamente:
+        <b>[saudacao]</b> (vira Bom dia, Boa tarde ou Boa noite conforme a hora),
         <b>[nome do restaurante]</b> ou <b>[nome]</b>, <b>[categoria]</b>, <b>[cidade]</b>.
         A etiqueta <b>[link]</b> vira o site cadastrado logo abaixo para o nicho buscado. Sem cadastro, ela fica visível no texto para você não esquecer de colar.
       </div>
     </div>
     <div style="display:flex;gap:9px;margin-top:9px">
-      <button class="btn sm ghost" id="bMsgPadrao">Restaurar texto original</button>
+      <button class="btn sm ghost" id="bMsgPadrao">Restaurar os 3 modelos</button>
       <button class="btn sm ghost" id="bMsgAuto">Usar os modelos automáticos</button>
     </div>
 
@@ -548,6 +555,7 @@
 
     <div class="foot">
       <button class="btn ghost" onclick="closeM('mLote')">Fechar</button>
+      <button class="btn ghost" id="bLoteIA">✨ Variar com IA</button>
       <button class="btn ghost" id="bLotePular">Pular este</button>
       <button class="btn" id="bLoteEnviar">Enviar e ir para o próximo</button>
     </div>
@@ -558,6 +566,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="js/nuvem.js?v=5"></script>
-<script src="js/app.js?v=34"></script>
+<script src="js/app.js?v=36"></script>
 </body>
 </html>
